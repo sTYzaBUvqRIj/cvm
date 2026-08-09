@@ -1,0 +1,9 @@
+*.exe
+*.cvmb
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+.DS_Store

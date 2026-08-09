@@ -1,0 +1,17 @@
+# ============================================================================
+# complex_algo.cvma — Euclidean Algorithm for GCD(48, 18) = 6
+# ============================================================================
+.registers 4
+
+CONST_I32  r0, 48             # a = 48
+CONST_I32  r1, 18             # b = 18
+
+gcd_loop:
+IF_EQZ     r1, gcd_done       # while b != 0
+REM_I32    r2, r0, r1         # temp = a % b
+MOVE       r0, r1             # a = b
+MOVE       r1, r2             # b = temp
+GOTO_16    gcd_loop
+
+gcd_done:
+RETURN     r0                 # Returns 6

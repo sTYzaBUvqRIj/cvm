@@ -1,0 +1,18 @@
+# ============================================================================
+# factorial.cvma — Computes 10! = 3,628,800
+# ============================================================================
+.registers 6
+
+CONST_I32  r0, 10         # n = 10
+CONST_I32  r1, 1          # fact = 1
+CONST_I32  r2, 1          # i = 1
+CONST_I32  r3, 1          # step = 1
+
+fact_loop:
+IF_GT      r2, r0, fact_done # if i > n exit
+MUL_I32    r1, r1, r2     # fact *= i
+ADD_I32    r2, r2, r3     # i++
+GOTO_16    fact_loop
+
+fact_done:
+RETURN     r1             # Returns 3628800

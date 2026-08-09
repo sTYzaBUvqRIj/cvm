@@ -1,0 +1,19 @@
+# ============================================================================
+# basic.cvma — Basic Constants, Registers, and Data Movement
+# ============================================================================
+.registers 8
+
+# Load constants of various types
+CONST_I8   r0, 42
+CONST_I16  r1, 1000
+CONST_I32  r2, 50000
+CONST_I64  r3, 0x123456789ABCDEF
+CONST_F32  r4, 3.14159f
+CONST_F64  r5, 2.718281828459
+
+# Move values between registers
+MOVE       r6, r0       # r6 = 42
+MOVE       r7, r6       # r7 = 42
+
+# Return result in r7
+RETURN     r7

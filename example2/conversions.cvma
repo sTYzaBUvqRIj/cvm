@@ -1,0 +1,16 @@
+# ============================================================================
+# conversions.cvma — Type Conversions between Int and Double Float
+# ============================================================================
+.registers 6
+
+# Start with int 255
+CONST_I32  r0, 255
+I32_TO_F64 r1, r0             # r1 = 255.0 (double)
+
+# Multiply double by 2.0
+CONST_F64  r2, 2.0
+MUL_F64    r3, r1, r2         # r3 = 510.0
+
+# Convert double back to int32
+F64_TO_I32 r4, r3             # r4 = 510
+RETURN     r4                 # Returns 510

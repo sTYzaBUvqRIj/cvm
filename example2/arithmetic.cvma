@@ -1,0 +1,24 @@
+# ============================================================================
+# arithmetic.cvma — Integer and Floating-Point Arithmetic
+# ============================================================================
+.registers 10
+
+# Calculate (10 + 20) * 3 - 10 / 2 = 85
+CONST_I32  r0, 10
+CONST_I32  r1, 20
+ADD_I32    r2, r0, r1     # r2 = 30
+
+CONST_I32  r3, 3
+MUL_I32    r4, r2, r3     # r4 = 90
+
+CONST_I32  r5, 2
+DIV_I32    r6, r0, r5     # r6 = 10 / 2 = 5
+
+SUB_I32    r7, r4, r6     # r7 = 90 - 5 = 85
+
+# Float calculation: 2.5 * 4.0 = 10.0
+CONST_F32  r8, 2.5f
+CONST_F32  r9, 4.0f
+MUL_F32    r8, r8, r9
+
+RETURN     r7             # Returns 85 in i32 slot

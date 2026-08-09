@@ -1,0 +1,21 @@
+# ============================================================================
+# fibonacci.cvma — Computes Fibonacci(15) = 610
+# ============================================================================
+.registers 8
+
+CONST_I32  r0, 15         # n = 15
+CONST_I32  r1, 0          # prev = 0
+CONST_I32  r2, 1          # curr = 1
+CONST_I32  r3, 1          # i = 1
+CONST_I32  r4, 1          # step = 1
+
+fib_loop:
+IF_GE      r3, r0, fib_done # if i >= n exit loop
+MOVE       r5, r2         # temp = curr
+ADD_I32    r2, r1, r2     # curr = prev + curr
+MOVE       r1, r5         # prev = temp
+ADD_I32    r3, r3, r4     # i++
+GOTO_16    fib_loop
+
+fib_done:
+RETURN     r2             # Returns 610

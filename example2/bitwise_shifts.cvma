@@ -1,0 +1,24 @@
+# ============================================================================
+# bitwise_shifts.cvma — Bitwise Logic (AND, OR, XOR) and Shift Operations
+# ============================================================================
+.registers 10
+
+# Masking: 0xFF00 & 0x0FF0 = 0x0F00 (3840)
+CONST_I32  r0, 0xFF00
+CONST_I32  r1, 0x0FF0
+AND_I32    r2, r0, r1         # r2 = 3840
+
+# Shift left: 1 << 4 = 16
+CONST_I32  r3, 1
+CONST_I32  r4, 4
+SHL_I32    r5, r3, r4         # r5 = 16
+
+# Shift right: 256 >> 3 = 32
+CONST_I32  r6, 256
+CONST_I32  r7, 3
+SHR_I32    r8, r6, r7         # r8 = 32
+
+# Combine: 3840 + 16 + 32 = 3888
+ADD_I32    r9, r2, r5
+ADD_I32    r9, r9, r8
+RETURN     r9                 # Returns 3888

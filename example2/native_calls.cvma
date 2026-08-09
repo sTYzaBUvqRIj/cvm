@@ -1,0 +1,20 @@
+# ============================================================================
+# native_calls.cvma — Calling Native C Functions (abs, max, print)
+# ============================================================================
+.registers 6
+
+# Call native function ID 7 (abs_i32): abs(-42) = 42
+CONST_I32  r0, -42
+CALL       r1, 7, r0          # r1 = abs(r0) = 42
+
+# Call native function ID 9 (max_i32): max(10, 50) = 50
+CONST_I32  r2, 10
+CONST_I32  r3, 50
+CALL       r4, 9, r2, r3      # r4 = max(10, 50) = 50
+
+# Call native function ID 0 (print_i32): print_i32(r4)
+CALL_VOID  0, r4              # Prints 50 to stdout
+
+# Combine results: 42 + 50 = 92
+ADD_I32    r5, r1, r4
+RETURN     r5                 # Returns 92
