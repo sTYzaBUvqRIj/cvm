@@ -219,9 +219,6 @@ VMError vm_execute(
     const uint8_t* bytecode,
     uint32_t       bytecode_size)
 {
-    if (ctx->flags & VM_FLAG_HALTED) {
-        return VM_OK;
-    }
     if ((ctx->flags & VM_FLAG_PAUSED) && !(ctx->flags & VM_FLAG_SINGLE_STEP)) {
         return VM_OK;
     }
