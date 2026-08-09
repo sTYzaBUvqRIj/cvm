@@ -367,8 +367,19 @@ typedef VMError (*VMNativeFn)(
 /** Maximum number of arguments per CALL / CALL_VOID instruction. */
 #define VM_MAX_CALL_ARGC      64
 
+/* =========================================================================
+ * Execution flags
+ * ====================================================================== */
+
+#define VM_FLAG_RUNNING      (1u << 0)  /* VM is actively executing           */
+#define VM_FLAG_PAUSED       (1u << 1)  /* execution is paused                */
+#define VM_FLAG_SINGLE_STEP  (1u << 2)  /* execute exactly one instruction   */
+#define VM_FLAG_HALTED       (1u << 3)  /* execution has halted / finished    */
+
 typedef struct VMContext {
     VMRegister  result;                           /* last RETURN / CALL value  */
+    uint32_t    pc;                               /* current program counter   */
+    uint32_t    flags;                            /* execution state flags     */
     uint32_t    native_count;                     /* number of registered fns  */
     VMNativeFn  native_funcs[VM_MAX_NATIVE_FUNCS];
     void*       user_data;                        /* host-defined payload      */

@@ -39,41 +39,34 @@ static inline uint64_t read64LE(const uint8_t* m)
 static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m); }
 
 /* =========================================================================
- * Bounds / register validation
- *
- * Both macros return a VMError directly from vm_execute().
- *
- * CHECK_BOUNDS(n): verify that [pc .. pc+n-1] is inside the bytecode buffer.
- *   Uses uint64_t arithmetic to avoid overflow when pc is near UINT32_MAX.
- *
- * CHECK_REG(r):   verify that register index r is within the register file.
+ * Bounds / register / execution exit helpers
  * ====================================================================== */
+
+#define VM_EXIT_ERR(err_code) \
+    do { \
+        ctx->pc = pc; \
+        ctx->flags &= ~VM_FLAG_RUNNING; \
+        ctx->flags |= VM_FLAG_HALTED; \
+        return (err_code); \
+    } while (0)
 
 #define CHECK_BOUNDS(needed) \
     do { \
         if ((uint64_t)(pc) + (uint64_t)(needed) > (uint64_t)(bytecode_size)) \
-            return VM_ERR_OUT_OF_BOUNDS; \
+            VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS); \
     } while (0)
 
 #define CHECK_REG(r) \
     do { \
         if ((uint32_t)(r) >= reg_count) \
-            return VM_ERR_INVALID_REGISTER; \
+            VM_EXIT_ERR(VM_ERR_INVALID_REGISTER); \
     } while (0)
-
-/* =========================================================================
- * Branch target validation
- *
- * Computes target = next_pc + signed_offset and validates the result before
- * assigning it to pc.  Uses int64_t arithmetic to catch both negative and
- * out-of-range targets cleanly.
- * ====================================================================== */
 
 #define BRANCH_TARGET(next_pc, offset, out_pc) \
     do { \
         const int64_t _t = (int64_t)(next_pc) + (int64_t)(offset); \
         if (_t < 0 || (uint64_t)_t > (uint64_t)(bytecode_size)) \
-            return VM_ERR_OUT_OF_BOUNDS; \
+            VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS); \
         (out_pc) = (uint32_t)_t; \
     } while (0)
 
@@ -226,7 +219,27 @@ VMError vm_execute(
     const uint8_t* bytecode,
     uint32_t       bytecode_size)
 {
+    if (ctx->flags & VM_FLAG_HALTED) {
+        return VM_OK;
+    }
+    if ((ctx->flags & VM_FLAG_PAUSED) && !(ctx->flags & VM_FLAG_SINGLE_STEP)) {
+        return VM_OK;
+    }
+
+    const int single_step = (ctx->flags & VM_FLAG_SINGLE_STEP) != 0;
+
+    ctx->flags |= VM_FLAG_RUNNING;
+    ctx->flags &= ~(VM_FLAG_PAUSED | VM_FLAG_HALTED);
+
+    /* Sync starting program counter */
+    if (pc != 0 || ctx->pc == 0) {
+        ctx->pc = pc;
+    } else {
+        pc = ctx->pc;
+    }
+
     while (pc < bytecode_size) {
+        ctx->pc = pc;
 
         /* ----------------------------------------------------------------
          * Read the 16-bit opcode.
@@ -338,7 +351,7 @@ VMError vm_execute(
         } break;
 
         /* ============================================================== */
-        /* Integer arithmetic – i32                                        */
+        /* Integer arithmetic – i32 / u32                                  */
         /*                                                                 */
         /* DIV / REM guard against both division by zero and the           */
         /* INT32_MIN / -1 case which is undefined behaviour in C.          */
@@ -363,22 +376,22 @@ VMError vm_execute(
             case OP_MUL_I32: regs[dst].i32 = regs[lhs].i32 * regs[rhs].i32; break;
             case OP_DIV_I32: {
                 const int32_t a = regs[lhs].i32, b = regs[rhs].i32;
-                if (b == 0) return VM_ERR_DIV_ZERO;
+                if (b == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].i32 = (a == INT32_MIN && b == -1) ? INT32_MIN : a / b;
                 break;
             }
             case OP_REM_I32: {
                 const int32_t a = regs[lhs].i32, b = regs[rhs].i32;
-                if (b == 0) return VM_ERR_DIV_ZERO;
+                if (b == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].i32 = (a == INT32_MIN && b == -1) ? 0 : a % b;
                 break;
             }
             case OP_DIV_U32:
-                if (regs[rhs].u32 == 0) return VM_ERR_DIV_ZERO;
+                if (regs[rhs].u32 == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].u32 = regs[lhs].u32 / regs[rhs].u32;
                 break;
             case OP_REM_U32:
-                if (regs[rhs].u32 == 0) return VM_ERR_DIV_ZERO;
+                if (regs[rhs].u32 == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].u32 = regs[lhs].u32 % regs[rhs].u32;
                 break;
             default: break;
@@ -386,7 +399,7 @@ VMError vm_execute(
         } break;
 
         /* ============================================================== */
-        /* Integer arithmetic – i64                                        */
+        /* Integer arithmetic – i64 / u64                                  */
         /* ============================================================== */
 
         case OP_ADD_I64:
@@ -408,22 +421,22 @@ VMError vm_execute(
             case OP_MUL_I64: regs[dst].i64 = regs[lhs].i64 * regs[rhs].i64; break;
             case OP_DIV_I64: {
                 const int64_t a = regs[lhs].i64, b = regs[rhs].i64;
-                if (b == 0) return VM_ERR_DIV_ZERO;
+                if (b == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].i64 = (a == INT64_MIN && b == (int64_t)(-1)) ? INT64_MIN : a / b;
                 break;
             }
             case OP_REM_I64: {
                 const int64_t a = regs[lhs].i64, b = regs[rhs].i64;
-                if (b == 0) return VM_ERR_DIV_ZERO;
+                if (b == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].i64 = (a == INT64_MIN && b == (int64_t)(-1)) ? 0 : a % b;
                 break;
             }
             case OP_DIV_U64:
-                if (regs[rhs].u64 == 0) return VM_ERR_DIV_ZERO;
+                if (regs[rhs].u64 == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].u64 = regs[lhs].u64 / regs[rhs].u64;
                 break;
             case OP_REM_U64:
-                if (regs[rhs].u64 == 0) return VM_ERR_DIV_ZERO;
+                if (regs[rhs].u64 == 0) VM_EXIT_ERR(VM_ERR_DIV_ZERO);
                 regs[dst].u64 = regs[lhs].u64 % regs[rhs].u64;
                 break;
             default: break;
@@ -618,6 +631,7 @@ VMError vm_execute(
         /* Comparisons  [dst:u8][lhs:u8][rhs:u8]                          */
         /* dst.i32 = -1 (less), 0 (equal), +1 (greater)                  */
         /* CMP_F32 / CMP_F64: returns -1 when either operand is NaN.      */
+        /* CMP_F32_GT: returns +2 when either operand is NaN.             */
         /* ============================================================== */
 
         case OP_CMP_I32:
@@ -665,10 +679,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* Type conversions  [dst:u8][src:u8]                              */
-        /*                                                                 */
-        /* Narrowing integer conversions (I32_TO_I8, I32_TO_I16) truncate */
-        /* and then sign-extend the result into the full 64-bit register.  */
-        /* Float-to-integer conversions truncate toward zero.              */
         /* ============================================================== */
 
         case OP_I32_TO_I8:
@@ -711,16 +721,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* Memory loads  [dst:u8][addr:u8]                                 */
-        /*                                                                 */
-        /* addr.ptr is the host pointer to read from.  The VM cannot       */
-        /* validate arbitrary host pointers; correctness of the address is */
-        /* the bytecode generator's responsibility.                        */
-        /*                                                                 */
-        /* Unsigned variants (LOAD8/16/32) zero-extend into dst.u64.      */
-        /* Signed variants  (LOAD8S/16S/32S) sign-extend into dst.i64.    */
-        /* LOAD64 / LOAD_PTR copy the full native width.                   */
-        /*                                                                 */
-        /* memcpy is used throughout to avoid strict-aliasing violations.  */
         /* ============================================================== */
 
         case OP_LOAD8:
@@ -737,7 +737,7 @@ VMError vm_execute(
             CHECK_REG(dst); CHECK_REG(addr);
             pc += 2;
             const void* p = regs[addr].ptr;
-            regs[dst].u64 = 0; /* clear the full register before partial writes */
+            regs[dst].u64 = 0;
             switch (op) {
             case OP_LOAD8:    { uint8_t  v; memcpy(&v, p, 1); regs[dst].u64 = (uint64_t)v; } break;
             case OP_LOAD8S:   { int8_t   v; memcpy(&v, p, 1); regs[dst].i64 = (int64_t) v; } break;
@@ -753,9 +753,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* Memory stores  [addr:u8][src:u8]                                */
-        /*                                                                 */
-        /* The low N bytes of src are written to the host address in       */
-        /* addr.ptr.  Upper bytes of src are silently discarded.           */
         /* ============================================================== */
 
         case OP_STORE8:
@@ -781,7 +778,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* LEA  [dst:u8][base:u8][offset:i32]                              */
-        /* dst.ptr = (char*)base.ptr + offset                             */
         /* ============================================================== */
 
         case OP_LEA: {
@@ -821,7 +817,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* Conditional branches — i32 register pair                        */
-        /* [A:u8][B:u8][offset:i16]                                       */
         /* ============================================================== */
 
         case OP_IF_EQ:
@@ -854,7 +849,6 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* Conditional branches — i32 vs zero                             */
-        /* [A:u8][offset:i16]                                             */
         /* ============================================================== */
 
         case OP_IF_EQZ:
@@ -885,23 +879,18 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* CALL  [dst:u8][id:u32][argc:u8][r0:u8]...[rN:u8]               */
-        /*                                                                 */
-        /* Calls the native function registered at id.  The return value  */
-        /* is written to regs[dst] and to ctx->result.                    */
         /* ============================================================== */
 
         case OP_CALL: {
-            /* Fixed-size prefix: dst(1) + id(4) + argc(1) = 6 bytes */
             CHECK_BOUNDS(6);
             const uint8_t  dst  = read8LE (bytecode + pc);
             const uint32_t id   = read32LE(bytecode + pc + 1);
             const uint8_t  argc = read8LE (bytecode + pc + 5);
-            /* Variable argument register list */
             CHECK_BOUNDS(6u + (uint32_t)argc);
             CHECK_REG(dst);
-            if (argc > VM_MAX_CALL_ARGC)    return VM_ERR_BAD_ARGC;
-            if (id >= VM_MAX_NATIVE_FUNCS)  return VM_ERR_BAD_FUNCTION;
-            if (!ctx->native_funcs[id])     return VM_ERR_BAD_FUNCTION;
+            if (argc > VM_MAX_CALL_ARGC)    VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (id >= VM_MAX_NATIVE_FUNCS)  VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
+            if (!ctx->native_funcs[id])     VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
 
             VMRegister args[VM_MAX_CALL_ARGC];
             {
@@ -918,7 +907,7 @@ VMError vm_execute(
             memset(&call_result, 0, sizeof(call_result));
             {
                 const VMError err = ctx->native_funcs[id](ctx, (uint32_t)argc, args, &call_result);
-                if (err != VM_OK) return err;
+                if (err != VM_OK) VM_EXIT_ERR(err);
             }
             regs[dst]   = call_result;
             ctx->result = call_result;
@@ -926,19 +915,16 @@ VMError vm_execute(
 
         /* ============================================================== */
         /* CALL_VOID  [id:u32][argc:u8][r0:u8]...[rN:u8]                  */
-        /*                                                                 */
-        /* Like CALL but discards the return value (ctx->result updated).  */
         /* ============================================================== */
 
         case OP_CALL_VOID: {
-            /* Fixed-size prefix: id(4) + argc(1) = 5 bytes */
             CHECK_BOUNDS(5);
             const uint32_t id   = read32LE(bytecode + pc);
             const uint8_t  argc = read8LE (bytecode + pc + 4);
             CHECK_BOUNDS(5u + (uint32_t)argc);
-            if (argc > VM_MAX_CALL_ARGC)    return VM_ERR_BAD_ARGC;
-            if (id >= VM_MAX_NATIVE_FUNCS)  return VM_ERR_BAD_FUNCTION;
-            if (!ctx->native_funcs[id])     return VM_ERR_BAD_FUNCTION;
+            if (argc > VM_MAX_CALL_ARGC)    VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (id >= VM_MAX_NATIVE_FUNCS)  VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
+            if (!ctx->native_funcs[id])     VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
 
             VMRegister args[VM_MAX_CALL_ARGC];
             {
@@ -955,7 +941,7 @@ VMError vm_execute(
             memset(&call_result, 0, sizeof(call_result));
             {
                 const VMError err = ctx->native_funcs[id](ctx, (uint32_t)argc, args, &call_result);
-                if (err != VM_OK) return err;
+                if (err != VM_OK) VM_EXIT_ERR(err);
             }
             ctx->result = call_result;
         } break;
@@ -965,14 +951,19 @@ VMError vm_execute(
         /* ============================================================== */
 
         case OP_RETURN_VOID:
+            ctx->pc = pc;
+            ctx->flags &= ~VM_FLAG_RUNNING;
+            ctx->flags |= VM_FLAG_HALTED;
             return VM_OK;
 
         case OP_RETURN: {
             CHECK_BOUNDS(1);
             const uint8_t src = read8LE(bytecode + pc);
             CHECK_REG(src);
-            /* pc is not advanced — we are returning immediately */
             ctx->result = regs[src];
+            ctx->pc = pc;
+            ctx->flags &= ~VM_FLAG_RUNNING;
+            ctx->flags |= VM_FLAG_HALTED;
             return VM_OK;
         }
 
@@ -981,10 +972,20 @@ VMError vm_execute(
         /* ============================================================== */
 
         default:
-            return VM_ERR_INVALID_OPCODE;
+            VM_EXIT_ERR(VM_ERR_INVALID_OPCODE);
 
         } /* switch (op) */
+
+        ctx->pc = pc;
+        if (single_step) {
+            ctx->flags &= ~(VM_FLAG_RUNNING | VM_FLAG_SINGLE_STEP);
+            ctx->flags |= VM_FLAG_PAUSED;
+            return VM_OK;
+        }
     } /* while (pc < bytecode_size) */
 
+    ctx->pc = pc;
+    ctx->flags &= ~VM_FLAG_RUNNING;
+    ctx->flags |= VM_FLAG_HALTED;
     return VM_OK;
 }
