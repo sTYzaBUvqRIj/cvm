@@ -38,6 +38,7 @@ static void print_usage(const char* prog)
         "\n"
         "Options:\n"
         "  --debug     Enable instruction tracing (if VM was compiled with VM_DEBUG)\n"
+        "  --profile   Enable opcode execution profiler & report mode\n"
         "  --regs N    Override register count (default: from file header)\n"
         "  --help      Show this help\n"
         "\n"
@@ -49,6 +50,7 @@ int main(int argc, char** argv)
 {
     const char* path    = NULL;
     int         debug   = 0;
+    int         profile = 0;
     int         reg_override = 0;  /* 0 = use header value */
 
     /* ---- parse arguments ---- */
@@ -59,6 +61,8 @@ int main(int argc, char** argv)
             return 0;
         } else if (strcmp(argv[i], "--debug") == 0) {
             debug = 1;
+        } else if (strcmp(argv[i], "--profile") == 0 || strcmp(argv[i], "-p") == 0) {
+            profile = 1;
         } else if (strcmp(argv[i], "--regs") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "error: --regs requires a value\n");
@@ -104,6 +108,7 @@ int main(int argc, char** argv)
     VMContext ctx;
     vm_init(&ctx);
     ctx.debug = debug;
+    ctx.profiler_enabled = profile;
     vm_register_stdlib(&ctx);
 
     /* ---- allocate + zero registers ---- */
@@ -133,6 +138,9 @@ int main(int argc, char** argv)
     if (err != VM_OK) {
         fprintf(stderr, "[vm_run] error: %s (code %d)\n",
                 vm_error_str(err), (int)err);
+        if (profile) {
+            vm_profiler_dump(&ctx, stdout);
+        }
         free(regs);
         cvmb_free(code);
         return (int)err;
@@ -151,6 +159,10 @@ int main(int argc, char** argv)
         (double)ctx.result.f32,
         ctx.result.f64,
         ctx.result.ptr);
+
+    if (profile) {
+        vm_profiler_dump(&ctx, stdout);
+    }
 
     free(regs);
     cvmb_free(code);

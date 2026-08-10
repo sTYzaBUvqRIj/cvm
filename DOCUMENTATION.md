@@ -1670,3 +1670,43 @@ char* vm_disassemble(const uint8_t* code, size_t size);
 void vm_disassemble_file(FILE* stream, const uint8_t* code, size_t size);
 ```
 
+---
+
+## Debugger & Profiler API
+
+### Debugger Interface
+
+Provides event callbacks for stepping, breakpoints, and execution traps.
+
+```c
+typedef enum VMDebugEvent {
+    VM_DEBUG_EVENT_STEP,       /* executed single instruction                 */
+    VM_DEBUG_EVENT_BREAKPOINT, /* hit breakpoint address                       */
+    VM_DEBUG_EVENT_ERROR       /* trapped execution error                      */
+} VMDebugEvent;
+
+typedef void (*VMDebugHook)(VMContext* ctx, VMDebugEvent event, uint32_t pc, uint16_t opcode);
+
+/* Breakpoint lookup helper */
+int vm_has_breakpoint(const VMContext* ctx, uint32_t pc);
+```
+
+To set up a debugger:
+1. Assign `ctx.debug_hook = my_debug_callback;`
+2. Point `ctx.breakpoints = my_pc_array;` and set `ctx.breakpoint_count`.
+3. To single-step, set `ctx.flags |= VM_FLAG_SINGLE_STEP`.
+
+### Execution Profiler
+
+Measures per-opcode execution frequencies and overall throughput.
+
+```c
+/* Reset opcode counters and total_instructions to zero */
+void vm_profiler_reset(VMContext* ctx);
+
+/* Dump formatted execution report table to stream (e.g. stdout) */
+void vm_profiler_dump(const VMContext* ctx, FILE* stream);
+```
+
+Enable by setting `ctx.profiler_enabled = 1`. In `vm_run`, pass `--profile` or `-p` to print the profiler report automatically upon process exit.
+

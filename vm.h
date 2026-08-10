@@ -35,6 +35,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
+
+/** Maximum supported opcode count for profiler table. */
+#define VM_OPCODE_COUNT 256
 
 #ifdef __cplusplus
 extern "C" {
@@ -376,6 +380,21 @@ typedef VMError (*VMNativeFn)(
 #define VM_FLAG_SINGLE_STEP  (1u << 2)  /* execute exactly one instruction   */
 #define VM_FLAG_HALTED       (1u << 3)  /* execution has halted / finished    */
 
+/* =========================================================================
+ * Debugger interface
+ * ====================================================================== */
+
+typedef enum VMDebugEvent {
+    VM_DEBUG_EVENT_STEP,       /* executed single instruction                 */
+    VM_DEBUG_EVENT_BREAKPOINT, /* hit breakpoint address                       */
+    VM_DEBUG_EVENT_ERROR       /* trapped execution error                      */
+} VMDebugEvent;
+
+struct VMContext;
+
+/** Callback function pointer for debugger events. */
+typedef void (*VMDebugHook)(struct VMContext* ctx, VMDebugEvent event, uint32_t pc, uint16_t opcode);
+
 typedef struct VMContext {
     VMRegister  result;                           /* last RETURN / CALL value  */
     uint32_t    pc;                               /* current program counter   */
@@ -384,6 +403,16 @@ typedef struct VMContext {
     VMNativeFn  native_funcs[VM_MAX_NATIVE_FUNCS];
     void*       user_data;                        /* host-defined payload      */
     int         debug;                            /* non-zero: trace to stderr */
+
+    /* Debugger interface */
+    VMDebugHook     debug_hook;                   /* event callback hook       */
+    const uint32_t* breakpoints;                  /* array of breakpoint PCs   */
+    uint32_t        breakpoint_count;             /* number of breakpoints     */
+
+    /* Profiler interface */
+    uint64_t    opcode_counts[VM_OPCODE_COUNT];   /* per-opcode execution count*/
+    uint64_t    total_instructions;               /* total instructions run    */
+    int         profiler_enabled;                 /* non-zero: enable profiler */
 } VMContext;
 
 /* =========================================================================
@@ -436,6 +465,19 @@ VMError vm_execute(
     const uint8_t* bytecode,
     uint32_t       bytecode_size
 );
+
+/* =========================================================================
+ * Debugger & Profiler API
+ * ====================================================================== */
+
+/** Returns 1 if pc matches a breakpoint in ctx->breakpoints, 0 otherwise. */
+int vm_has_breakpoint(const VMContext* ctx, uint32_t pc);
+
+/** Reset all profiler opcode counters and total_instructions to zero. */
+void vm_profiler_reset(VMContext* ctx);
+
+/** Dump formatted profiler report (top executed opcodes, totals) to stream. */
+void vm_profiler_dump(const VMContext* ctx, FILE* stream);
 
 #ifdef __cplusplus
 }

@@ -55,7 +55,8 @@ EXAMPLES = \
     unsigned_ops   \
     single_step    \
     coroutines     \
-    benchmark
+    benchmark      \
+    debugger_profiler
 
 # Tools (separate from examples — vm_run is the standalone bytecode runner)
 TOOLS = vm_run

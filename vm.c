@@ -8,6 +8,7 @@
 
 #include <math.h>       /* isnan()                          */
 #include <stdio.h>      /* fprintf(), stderr  (VM_DEBUG)    */
+#include <stdlib.h>     /* qsort()                          */
 #include <string.h>     /* memset(), memcpy()               */
 
 /* =========================================================================
@@ -47,6 +48,9 @@ static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m)
         ctx->pc = pc; \
         ctx->flags &= ~VM_FLAG_RUNNING; \
         ctx->flags |= VM_FLAG_HALTED; \
+        if (ctx->debug_hook) { \
+            ctx->debug_hook(ctx, VM_DEBUG_EVENT_ERROR, pc, op); \
+        } \
         return (err_code); \
     } while (0)
 
@@ -77,8 +81,6 @@ static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m)
  * when VM_DEBUG is defined; vm_execute() references it inside the same
  * preprocessor guard so no dead-code warning is generated.
  * ====================================================================== */
-
-#if defined(VM_DEBUG)
 
 static const char* vm_opname(uint16_t op)
 {
@@ -187,8 +189,6 @@ static const char* vm_opname(uint16_t op)
     }
 }
 
-#endif /* VM_DEBUG */
-
 /* =========================================================================
  * API
  * ====================================================================== */
@@ -219,10 +219,6 @@ VMError vm_execute(
     const uint8_t* bytecode,
     uint32_t       bytecode_size)
 {
-    if ((ctx->flags & VM_FLAG_PAUSED) && !(ctx->flags & VM_FLAG_SINGLE_STEP)) {
-        return VM_OK;
-    }
-
     /* If resuming from PAUSED state and pc is 0, continue from ctx->pc; otherwise use pc */
     if ((ctx->flags & VM_FLAG_PAUSED) && pc == 0) {
         pc = ctx->pc;
@@ -231,6 +227,7 @@ VMError vm_execute(
     }
 
     const int single_step = (ctx->flags & VM_FLAG_SINGLE_STEP) != 0;
+    uint16_t op = 0;
 
     ctx->flags |= VM_FLAG_RUNNING;
     ctx->flags &= ~(VM_FLAG_PAUSED | VM_FLAG_HALTED);
@@ -241,11 +238,32 @@ VMError vm_execute(
         /* ----------------------------------------------------------------
          * Read the 16-bit opcode.
          * ------------------------------------------------------------ */
-#if defined(VM_DEBUG)
         const uint32_t instr_pc = pc;
-#endif
         CHECK_BOUNDS(2);
-        const uint16_t op = read16LE(bytecode + pc);
+        op = read16LE(bytecode + pc);
+
+        /* Profiler accounting */
+        if (ctx->profiler_enabled && op < VM_OPCODE_COUNT) {
+            ctx->opcode_counts[op]++;
+            ctx->total_instructions++;
+        }
+
+        /* Breakpoint check — only trigger if not currently single-stepping */
+        if (!single_step && vm_has_breakpoint(ctx, instr_pc)) {
+            if (ctx->debug_hook) {
+                ctx->debug_hook(ctx, VM_DEBUG_EVENT_BREAKPOINT, instr_pc, op);
+            }
+            ctx->pc = instr_pc;
+            ctx->flags &= ~VM_FLAG_RUNNING;
+            ctx->flags |= VM_FLAG_PAUSED;
+            return VM_OK;
+        }
+
+        /* Debug step hook */
+        if (ctx->debug_hook) {
+            ctx->debug_hook(ctx, VM_DEBUG_EVENT_STEP, instr_pc, op);
+        }
+
         pc += 2;
 
 #if defined(VM_DEBUG)
@@ -985,4 +1003,82 @@ VMError vm_execute(
     ctx->flags &= ~VM_FLAG_RUNNING;
     ctx->flags |= VM_FLAG_HALTED;
     return VM_OK;
+}
+
+/* =========================================================================
+ * Debugger & Profiler Implementations
+ * ====================================================================== */
+
+int vm_has_breakpoint(const VMContext* ctx, uint32_t pc)
+{
+    if (!ctx || !ctx->breakpoints || ctx->breakpoint_count == 0)
+        return 0;
+    for (uint32_t i = 0; i < ctx->breakpoint_count; i++) {
+        if (ctx->breakpoints[i] == pc)
+            return 1;
+    }
+    return 0;
+}
+
+void vm_profiler_reset(VMContext* ctx)
+{
+    if (!ctx) return;
+    memset(ctx->opcode_counts, 0, sizeof(ctx->opcode_counts));
+    ctx->total_instructions = 0;
+}
+
+typedef struct {
+    uint16_t opcode;
+    uint64_t count;
+} VMOpCount;
+
+static int cmp_op_counts(const void* a, const void* b)
+{
+    const VMOpCount* oa = (const VMOpCount*)a;
+    const VMOpCount* ob = (const VMOpCount*)b;
+    if (oa->count > ob->count) return -1;
+    if (oa->count < ob->count) return 1;
+    return 0;
+}
+
+void vm_profiler_dump(const VMContext* ctx, FILE* stream)
+{
+    if (!ctx || !stream) return;
+
+    fprintf(stream, "\n============================================================\n");
+    fprintf(stream, "                 CVM Execution Profiler Report              \n");
+    fprintf(stream, "============================================================\n");
+    fprintf(stream, "Total Instructions Executed: %llu\n\n", (unsigned long long)ctx->total_instructions);
+
+    if (ctx->total_instructions == 0) {
+        fprintf(stream, "No instructions executed.\n");
+        fprintf(stream, "============================================================\n");
+        return;
+    }
+
+    VMOpCount items[VM_OPCODE_COUNT];
+    uint32_t item_count = 0;
+
+    for (uint32_t op = 0; op < VM_OPCODE_COUNT; op++) {
+        if (ctx->opcode_counts[op] > 0) {
+            items[item_count].opcode = (uint16_t)op;
+            items[item_count].count  = ctx->opcode_counts[op];
+            item_count++;
+        }
+    }
+
+    qsort(items, item_count, sizeof(VMOpCount), cmp_op_counts);
+
+    fprintf(stream, "%-6s  %-20s  %-12s  %-10s\n", "Opcode", "Name", "Count", "Percentage");
+    fprintf(stream, "------------------------------------------------------------\n");
+
+    for (uint32_t i = 0; i < item_count; i++) {
+        double pct = (double)items[i].count * 100.0 / (double)ctx->total_instructions;
+        fprintf(stream, "0x%04X  %-20s  %-12llu  %6.2f%%\n",
+                items[i].opcode,
+                vm_opname(items[i].opcode),
+                (unsigned long long)items[i].count,
+                pct);
+    }
+    fprintf(stream, "============================================================\n\n");
 }

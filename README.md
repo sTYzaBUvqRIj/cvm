@@ -313,8 +313,18 @@ Copyright (C) 2026 CVM Contributors.
 - [ ] **`vm_run` — argument passing** — allow passing initial register values via
       command-line arguments (e.g. `vm_run program.cvmb --r0=42`)
 - [ ] **`vm_run` — exit code** — propagate `ctx.result.i32` as the process exit code
-- [ ] **Debugger interface** — a step/breakpoint callback hook in `VMContext`
-- [ ] **Profiler** — per-opcode execution counters and a report mode in `vm_run`
+- [x] **Debugger interface** — step/breakpoint callback hooks (`VMDebugHook`, `breakpoints`) in `VMContext`
+- [x] **Profiler** — per-opcode execution counters and `--profile` report mode in `vm_run`
+
+### Future Roadmap & Advanced Features
+
+- [ ] **JIT Compilation Engine** — Just-In-Time native code compiler (x86_64 / AArch64) translating VM bytecode into native machine instructions for near-native performance
+- [ ] **Garbage Collection System** — Mark-and-sweep or generational GC engine managing dynamic heap object allocations
+- [ ] **Multi-threading / Async Fiber Support** — Lightweight cooperative fibers, async execution flags, and channel-based inter-fiber communication
+- [ ] **Debug Adapter Protocol (DAP) / GDB Remote Bridge** — Standard DAP server implementation enabling full visual interactive debugging in VS Code / IDEs
+- [ ] **Source Maps & Debug Symbol Tables (`.cvmdb`)** — Source file line-number mappings and variable name lookup tables for high-level debuggers
+- [ ] **Foreign Function Interface (FFI)** — Dynamic shared library (`.so` / `.dll`) loader and C ABI marshalling engine for calling arbitrary host C libraries without recompilation
+- [ ] **SIMD Vector Extensions** — 128-bit packed vector registers (`VEC128`) and parallel float/int vector arithmetic opcodes
 
 ### Performance & Testing
 
