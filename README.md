@@ -77,30 +77,46 @@ cvm/
 │   ├── memory.c          LOAD*/STORE* — all widths, signed/unsigned
 │   ├── pointers.c        LEA, LOAD_PTR, STORE_PTR, pointer chains
 │   ├── native_functions.c CALL, CALL_VOID, native registration
-│   ├── error_handling.c  All VM error codes intentionally triggered
-│   ├── loops.c           Counting, sum, GCD, nested, do-while
-│   ├── fibonacci.c       Iterative Fibonacci (i32 and i64)
-│   ├── factorial.c       Factorial (i32 and i64)
-│   ├── complex.c         Calculator, prime, sort, matrix, strlen
-│   ├── file_execution.c  .cvmb write/read/execute round-trip demo
-│   ├── assembler_disassembler_demo.c  Assembly & disassembly round-trip test
-│   └── unsigned_ops.c    DIV_U32, REM_U32, DIV_U64, REM_U64, CMP_F32_GT
-└── example2/         Text Assembly (.cvma) Example Suite & Compiler
-    ├── Makefile          Builds cvma2cvmb and compiles all .cvma -> .cvmb
-    ├── README.md         Documentation for example2 suite
-    ├── cvma2cvmb.c       CLI assembly compiler source (.cvma -> .cvmb)
-    ├── basic.cvma        Basic assembly registers, moves, constants
-    ├── arithmetic.cvma   Integer & float arithmetic
-    ├── control_flow.cvma Branches, loops, and labels
-    ├── native_calls.cvma Native function calls (abs, max, print)
-    ├── bitwise_shifts.cvma Bitwise operations and shifts
-    ├── conversions.cvma  Int to float conversions
-    ├── floating_point.cvma Double precision float math
-    ├── comparison.cvma   Three-way comparisons (-1, 0, +1)
-    ├── fibonacci.cvma    Fibonacci calculation loop
-    ├── factorial.cvma    Factorial calculation loop
-    ├── complex_algo.cvma Euclidean GCD algorithm in assembly
-    └── unsigned_ops.cvma Unsigned division/remainder and CMP_F32_GT in assembly
+├── example/                    # C API test & example programs (22 standalone files)
+│   ├── vm_builder.h            # Dynamic bytecode emitter & test macro helpers
+│   ├── basic.c                 # Constants, register moves, NOP, return
+│   ├── arithmetic.c            # Integer arithmetic (i32/i64) & negation
+│   ├── floating_point.c        # Float arithmetic (f32/f64) & IEEE edge cases
+│   ├── comparison.c            # Three-way comparisons (signed & float)
+│   ├── branching.c             # Conditional/unconditional jumps & loops
+│   ├── bitwise.c               # Bitwise AND/OR/XOR/NOT operations
+│   ├── shifts.c                # SHL/SHR/USHR shift operations
+│   ├── conversions.c           # All 14 scalar type conversions
+│   ├── memory.c                # LOAD*/STORE* operations (all widths)
+│   ├── pointers.c              # LEA & pointer dereference patterns
+│   ├── native_functions.c      # Native C host callback dispatch
+│   ├── error_handling.c        # Trapping & error code tests
+│   ├── loops.c                 # Structured loop patterns & algorithms
+│   ├── fibonacci.c             # Fibonacci sequence generators
+│   ├── factorial.c             # Factorial calculations
+│   ├── complex.c               # Calculator, sorting, matrix, stats
+│   ├── file_execution.c        # Binary serialization & loading
+│   ├── assembler_disassembler_demo.c # Assembler/disassembler round-trip
+│   ├── unsigned_ops.c          # Unsigned division/remainder & CMP_F32_GT
+│   ├── single_step.c           # Single-stepping & VMContext state control
+│   ├── coroutines.c            # Generator/Coroutine pattern via single-step
+│   └── benchmark.c             # High-throughput opcode execution benchmark
+├── example2/                   # Text Assembly (.cvma) test suite (14 files)
+│   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)
+│   ├── basic.cvma              # Basic assembly instructions
+│   ├── arithmetic.cvma         # Assembly arithmetic ops
+│   ├── control_flow.cvma       # Branching & label resolution
+│   ├── native_calls.cvma       # Native host function calling
+│   ├── bitwise_shifts.cvma     # Bitwise and shift assembly ops
+│   ├── conversions.cvma        # Type conversion assembly ops
+│   ├── floating_point.cvma     # Float assembly ops
+│   ├── comparison.cvma         # Comparison assembly ops
+│   ├── fibonacci.cvma          # Fibonacci algorithm assembly
+│   ├── factorial.cvma          # Factorial algorithm assembly
+│   ├── complex_algo.cvma       # Euclidean GCD algorithm
+│   ├── unsigned_ops.cvma       # Unsigned ops & CMP_F32_GT assembly
+│   ├── collatz.cvma            # Collatz 3n+1 stopping time assembly
+│   └── binary_search.cvma      # Binary search algorithm assembly
 ```
 
 ---

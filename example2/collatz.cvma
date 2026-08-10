@@ -1,0 +1,32 @@
+; =============================================================================
+; collatz.cvma — Collatz Conjecture (3n + 1) stopping time calculator
+;
+; Given starting n = 27, counts the number of steps required to reach 1.
+; Expected result: 111 steps (r3 = 111).
+; =============================================================================
+
+.version  1
+.registers 8
+
+.code
+    CONST_I32 r0, 27        ; r0 = n = 27
+    CONST_I32 r1, 0         ; r1 = steps = 0
+    CONST_I32 r2, 1         ; r2 = 1 (constant)
+    CONST_I32 r3, 3         ; r3 = 3 (constant)
+
+loop:
+    IF_EQ r0, r2, done      ; if n == 1, done
+    ADD_I32 r1, r1, r2      ; steps++
+    AND_I32 r4, r0, r2      ; r4 = n & 1
+    IF_NEZ r4, odd          ; if (n % 2 != 0) goto odd
+
+    USHR_I32 r0, r0, r2     ; even: n = n >> 1
+    GOTO_16 loop
+
+odd:
+    MUL_I32 r0, r0, r3      ; odd: n = 3*n
+    ADD_I32 r0, r0, r2      ; n = 3*n + 1
+    GOTO_16 loop
+
+done:
+    RETURN r1               ; return steps (111)

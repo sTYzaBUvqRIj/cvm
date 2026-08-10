@@ -53,7 +53,9 @@ EXAMPLES = \
     file_execution \
     assembler_disassembler_demo \
     unsigned_ops   \
-    single_step
+    single_step    \
+    coroutines     \
+    benchmark
 
 # Tools (separate from examples — vm_run is the standalone bytecode runner)
 TOOLS = vm_run

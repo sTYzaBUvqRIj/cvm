@@ -33,7 +33,10 @@ example/
 ├── complex.c           calculator, prime test, sort, matrix, statistics
 ├── file_execution.c    .cvmb write/read/execute round-trip demo
 ├── assembler_disassembler_demo.c assembly parsing & disassembler round-trip test
-└── unsigned_ops.c      DIV_U32, REM_U32, DIV_U64, REM_U64, CMP_F32_GT tests
+├── unsigned_ops.c      DIV_U32, REM_U32, DIV_U64, REM_U64, CMP_F32_GT tests
+├── single_step.c       VMContext pc, flags, and single-step execution control
+├── coroutines.c        Generator/Coroutine pattern using VM single-stepping
+└── benchmark.c         Performance benchmark measuring VM throughput (1M Collatz runs)
 ```
 
 ---
