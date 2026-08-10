@@ -204,20 +204,92 @@ static const char* vm_opname(uint16_t op)
 #endif
 
 /* =========================================================================
+ * Dynamic Storage Helpers
+ * ====================================================================== */
+
+static VMError vm_ensure_registers(VMContext* ctx, uint32_t needed)
+{
+    if (needed <= ctx->register_capacity) return VM_OK;
+    uint32_t cap = (ctx->register_capacity == 0) ? 32 : ctx->register_capacity;
+    while (cap < needed) {
+        cap *= 2;
+    }
+    VMRegister* new_buf = (VMRegister*)realloc(ctx->registers, cap * sizeof(VMRegister));
+    if (!new_buf) return VM_ERR_OUT_OF_BOUNDS;
+    memset(new_buf + ctx->register_capacity, 0, (cap - ctx->register_capacity) * sizeof(VMRegister));
+    ctx->registers = new_buf;
+    ctx->register_capacity = cap;
+    return VM_OK;
+}
+
+static VMError vm_ensure_frames(VMContext* ctx, uint32_t needed)
+{
+    if (needed <= ctx->frame_capacity) return VM_OK;
+    uint32_t cap = (ctx->frame_capacity == 0) ? 8 : ctx->frame_capacity;
+    while (cap < needed) {
+        cap *= 2;
+    }
+    VMFrame* new_buf = (VMFrame*)realloc(ctx->frames, cap * sizeof(VMFrame));
+    if (!new_buf) return VM_ERR_OUT_OF_BOUNDS;
+    memset(new_buf + ctx->frame_capacity, 0, (cap - ctx->frame_capacity) * sizeof(VMFrame));
+    ctx->frames = new_buf;
+    ctx->frame_capacity = cap;
+    return VM_OK;
+}
+
+static VMError vm_ensure_native_funcs(VMContext* ctx, uint32_t needed)
+{
+    if (needed <= ctx->native_capacity) return VM_OK;
+    uint32_t cap = (ctx->native_capacity == 0) ? 16 : ctx->native_capacity;
+    while (cap < needed) {
+        cap *= 2;
+    }
+    VMNativeFn* new_buf = (VMNativeFn*)realloc(ctx->native_funcs, cap * sizeof(VMNativeFn));
+    if (!new_buf) return VM_ERR_BAD_FUNCTION;
+    memset(new_buf + ctx->native_capacity, 0, (cap - ctx->native_capacity) * sizeof(VMNativeFn));
+    ctx->native_funcs = new_buf;
+    ctx->native_capacity = cap;
+    return VM_OK;
+}
+
+/* =========================================================================
  * API
  * ====================================================================== */
 
 void vm_init(VMContext* ctx)
 {
+    if (!ctx) return;
     memset(ctx, 0, sizeof(VMContext));
+}
+
+void vm_cleanup(VMContext* ctx)
+{
+    if (!ctx) return;
+    if (ctx->registers)    { free(ctx->registers);    ctx->registers = NULL; }
+    if (ctx->frames)       { free(ctx->frames);       ctx->frames = NULL; }
+    if (ctx->native_funcs) { free(ctx->native_funcs); ctx->native_funcs = NULL; }
+    ctx->register_capacity = 0;
+    ctx->register_count    = 0;
+    ctx->frame_capacity    = 0;
+    ctx->call_depth        = 0;
+    ctx->native_capacity   = 0;
+    ctx->native_count      = 0;
+}
+
+void vm_destroy(VMContext* ctx)
+{
+    vm_cleanup(ctx);
 }
 
 VMError vm_register_function(VMContext* ctx, uint32_t id, VMNativeFn fn)
 {
     if (id >= VM_MAX_NATIVE_FUNCS)
         return VM_ERR_BAD_FUNCTION;
+    if (vm_ensure_native_funcs(ctx, id + 1) != VM_OK)
+        return VM_ERR_BAD_FUNCTION;
     ctx->native_funcs[id] = fn;
-    ctx->native_count++;
+    if (id >= ctx->native_count)
+        ctx->native_count = id + 1;
     return VM_OK;
 }
 
@@ -227,7 +299,7 @@ VMError vm_register_function(VMContext* ctx, uint32_t id, VMNativeFn fn)
 
 VMError vm_execute(
     VMContext*     ctx,
-    VMRegister*    regs,
+    VMRegister*    host_regs,
     uint32_t       reg_count,
     uint32_t       pc,
     const uint8_t* bytecode,
@@ -245,6 +317,26 @@ VMError vm_execute(
 
     ctx->flags |= VM_FLAG_RUNNING;
     ctx->flags &= ~(VM_FLAG_PAUSED | VM_FLAG_HALTED);
+
+    /* Initialize register windowing for execution */
+    uint32_t top_reg_count = (reg_count > 0) ? reg_count : 16;
+    uint32_t reg_base = 0;
+    if (ctx->call_depth > 0 && ctx->frames) {
+        reg_base = ctx->frames[ctx->call_depth - 1].reg_base + ctx->frames[ctx->call_depth - 1].reg_count;
+    }
+
+    if (vm_ensure_registers(ctx, reg_base + top_reg_count) != VM_OK) {
+        return VM_ERR_OUT_OF_BOUNDS;
+    }
+
+    if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+        if (!(ctx->flags & VM_FLAG_PAUSED)) {
+            memcpy(ctx->registers, host_regs, reg_count * sizeof(VMRegister));
+        }
+    }
+
+    VMRegister* cur_regs = ctx->registers + reg_base;
+#define regs cur_regs
 
     while (pc < bytecode_size) {
         ctx->pc = pc;
@@ -272,6 +364,9 @@ VMError vm_execute(
             ctx->pc = instr_pc;
             ctx->flags &= ~VM_FLAG_RUNNING;
             ctx->flags |= VM_FLAG_PAUSED;
+            if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+                memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+            }
             return VM_OK;
         }
 
@@ -918,9 +1013,10 @@ VMError vm_execute(
             const uint8_t  argc = read8LE (bytecode + pc + 5);
             CHECK_BOUNDS(6u + (uint32_t)argc);
             CHECK_REG(dst);
-            if (argc > VM_MAX_CALL_ARGC)    VM_EXIT_ERR(VM_ERR_BAD_ARGC);
-            if (id >= VM_MAX_NATIVE_FUNCS)  VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
-            if (!ctx->native_funcs[id])     VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
+            if (argc > VM_MAX_CALL_ARGC)
+                VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (id >= ctx->native_capacity || !ctx->native_funcs || !ctx->native_funcs[id])
+                VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
 
             VMRegister args[VM_MAX_CALL_ARGC];
             {
@@ -928,7 +1024,7 @@ VMError vm_execute(
                 for (i = 0; i < (uint32_t)argc; i++) {
                     const uint8_t ai = read8LE(bytecode + pc + 6 + i);
                     CHECK_REG(ai);
-                    args[i] = regs[ai];
+                    args[i] = cur_regs[ai];
                 }
             }
             pc += 6u + (uint32_t)argc;
@@ -939,8 +1035,8 @@ VMError vm_execute(
                 const VMError err = ctx->native_funcs[id](ctx, (uint32_t)argc, args, &call_result);
                 if (err != VM_OK) VM_EXIT_ERR(err);
             }
-            regs[dst]   = call_result;
-            ctx->result = call_result;
+            cur_regs[dst] = call_result;
+            ctx->result   = call_result;
         } break;
 
         /* ============================================================== */
@@ -952,9 +1048,10 @@ VMError vm_execute(
             const uint32_t id   = read32LE(bytecode + pc);
             const uint8_t  argc = read8LE (bytecode + pc + 4);
             CHECK_BOUNDS(5u + (uint32_t)argc);
-            if (argc > VM_MAX_CALL_ARGC)    VM_EXIT_ERR(VM_ERR_BAD_ARGC);
-            if (id >= VM_MAX_NATIVE_FUNCS)  VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
-            if (!ctx->native_funcs[id])     VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
+            if (argc > VM_MAX_CALL_ARGC)
+                VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (id >= ctx->native_capacity || !ctx->native_funcs || !ctx->native_funcs[id])
+                VM_EXIT_ERR(VM_ERR_BAD_FUNCTION);
 
             VMRegister args[VM_MAX_CALL_ARGC];
             {
@@ -962,7 +1059,7 @@ VMError vm_execute(
                 for (i = 0; i < (uint32_t)argc; i++) {
                     const uint8_t ai = read8LE(bytecode + pc + 5 + i);
                     CHECK_REG(ai);
-                    args[i] = regs[ai];
+                    args[i] = cur_regs[ai];
                 }
             }
             pc += 5u + (uint32_t)argc;
@@ -984,16 +1081,22 @@ VMError vm_execute(
             ctx->pc = pc;
             ctx->flags &= ~VM_FLAG_RUNNING;
             ctx->flags |= VM_FLAG_HALTED;
+            if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+                memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+            }
             return VM_OK;
 
         case OP_RETURN: {
             CHECK_BOUNDS(1);
             const uint8_t src = read8LE(bytecode + pc);
             CHECK_REG(src);
-            ctx->result = regs[src];
+            ctx->result = cur_regs[src];
             ctx->pc = pc;
             ctx->flags &= ~VM_FLAG_RUNNING;
             ctx->flags |= VM_FLAG_HALTED;
+            if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+                memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+            }
             return VM_OK;
         }
 
@@ -1008,30 +1111,43 @@ VMError vm_execute(
             const uint8_t  argc      = read8LE (bytecode + pc + 5);
             CHECK_BOUNDS(6u + (uint32_t)argc);
             CHECK_REG(dst);
-            if (argc > VM_MAX_CALL_ARGC)             VM_EXIT_ERR(VM_ERR_BAD_ARGC);
-            if (target_pc >= bytecode_size)          VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS);
-            if (ctx->call_depth >= VM_MAX_CALL_DEPTH) VM_EXIT_ERR(VM_ERR_STACK_OVERFLOW);
+            if (argc > VM_MAX_CALL_ARGC)    VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (target_pc >= bytecode_size) VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS);
 
             VMRegister call_args[VM_MAX_CALL_ARGC];
             for (uint32_t i = 0; i < (uint32_t)argc; i++) {
                 const uint8_t ai = read8LE(bytecode + pc + 6 + i);
                 CHECK_REG(ai);
-                call_args[i] = regs[ai];
+                call_args[i] = cur_regs[ai];
             }
 
-            VMFrame* frame = &ctx->call_stack[ctx->call_depth];
-            frame->return_pc = pc + 6u + (uint32_t)argc;
-            frame->dst_reg   = dst;
-            frame->reg_count = reg_count;
+            uint32_t callee_reg_count = (reg_count > 0) ? reg_count : 16;
+            uint32_t callee_base = reg_base + reg_count;
 
-            const uint32_t save_regs_count = (reg_count < VM_MAX_FRAME_REGS) ? reg_count : VM_MAX_FRAME_REGS;
-            memcpy(frame->saved_regs, regs, save_regs_count * sizeof(VMRegister));
+            if (vm_ensure_registers(ctx, callee_base + callee_reg_count) != VM_OK) {
+                VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS);
+            }
+            if (vm_ensure_frames(ctx, ctx->call_depth + 1) != VM_OK) {
+                VM_EXIT_ERR(VM_ERR_STACK_OVERFLOW);
+            }
+
+            /* Push 16-byte metadata VMFrame */
+            VMFrame* frame = &ctx->frames[ctx->call_depth];
+            frame->return_pc = pc + 6u + (uint32_t)argc;
+            frame->reg_base  = reg_base;
+            frame->dst_reg   = dst;
+            frame->reg_count = (uint16_t)reg_count;
 
             ctx->call_depth++;
 
-            memset(regs, 0, reg_count * sizeof(VMRegister));
+            /* Switch window base & count */
+            reg_base  = callee_base;
+            reg_count = callee_reg_count;
+            cur_regs  = ctx->registers + reg_base;
+
+            memset(cur_regs, 0, callee_reg_count * sizeof(VMRegister));
             for (uint32_t i = 0; i < (uint32_t)argc; i++) {
-                regs[i] = call_args[i];
+                cur_regs[i] = call_args[i];
             }
 
             pc = target_pc;
@@ -1050,27 +1166,32 @@ VMError vm_execute(
 
             if (ctx->call_depth == 0) {
                 if (src != 0xFF) {
-                    ctx->result = regs[src];
+                    ctx->result = cur_regs[src];
                 }
                 ctx->pc = pc;
                 ctx->flags &= ~VM_FLAG_RUNNING;
                 ctx->flags |= VM_FLAG_HALTED;
+                if (host_regs && reg_count > 0) {
+                    memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+                }
                 return VM_OK;
             }
-
-            ctx->call_depth--;
-            const VMFrame* frame = &ctx->call_stack[ctx->call_depth];
 
             VMRegister ret_val;
             memset(&ret_val, 0, sizeof(ret_val));
             if (src != 0xFF) {
-                ret_val = regs[src];
+                ret_val = cur_regs[src];
             }
 
-            const uint32_t restore_count = (frame->reg_count < VM_MAX_FRAME_REGS) ? frame->reg_count : VM_MAX_FRAME_REGS;
-            memcpy(regs, frame->saved_regs, restore_count * sizeof(VMRegister));
-            regs[frame->dst_reg] = ret_val;
-            ctx->result          = ret_val;
+            ctx->call_depth--;
+            const VMFrame* frame = &ctx->frames[ctx->call_depth];
+
+            reg_base  = frame->reg_base;
+            reg_count = frame->reg_count;
+            cur_regs  = ctx->registers + reg_base;
+
+            cur_regs[frame->dst_reg] = ret_val;
+            ctx->result               = ret_val;
 
             pc = frame->return_pc;
         } break;
@@ -1088,6 +1209,9 @@ VMError vm_execute(
         if (single_step) {
             ctx->flags &= ~(VM_FLAG_RUNNING | VM_FLAG_SINGLE_STEP);
             ctx->flags |= VM_FLAG_PAUSED;
+            if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+                memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+            }
             return VM_OK;
         }
     } /* while (pc < bytecode_size) */
@@ -1095,6 +1219,10 @@ VMError vm_execute(
     ctx->pc = pc;
     ctx->flags &= ~VM_FLAG_RUNNING;
     ctx->flags |= VM_FLAG_HALTED;
+    if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
+        memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
+    }
+    #undef regs
     return VM_OK;
 }
 

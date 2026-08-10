@@ -1623,6 +1623,10 @@ emit_ret_void(&bc);   // void return to caller
 /* Zero-initialise a VMContext. Must be called before any other vm_* call. */
 void vm_init(VMContext* ctx);
 
+/* Release all dynamically allocated memory in ctx (registers, call frames, native functions). */
+void vm_cleanup(VMContext* ctx);
+void vm_destroy(VMContext* ctx);
+
 /* Register a native function at id (0 <= id < 256).
    Overwrites any existing entry at that id.
    Returns VM_ERR_BAD_FUNCTION if id is out of range. */

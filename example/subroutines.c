@@ -174,11 +174,15 @@ static void test_recursive_fibonacci(void)
 }
 
 /*
- * Test 4: Call Stack Overflow (> 128 recursive calls)
+ * Test 4: Deep Recursion & Dynamic Stack Growth (> 128 levels deep)
+ *
+ * countdown(n):
+ *   if n <= 0 return 0
+ *   else return 1 + countdown(n - 1)
  */
-static void test_call_stack_overflow(void)
+static void test_deep_recursion_and_dynamic_growth(void)
 {
-    printf("\n--- test_call_stack_overflow ---\n");
+    printf("\n--- test_deep_recursion_and_dynamic_growth ---\n");
 
     VMContext ctx;
     vm_init(&ctx);
@@ -186,14 +190,73 @@ static void test_call_stack_overflow(void)
     Bytecode bc;
     bc_init(&bc);
 
-    /* infinite_recurse at pc = 0: CALL_BC r0, 0, 0 */
-    emit_call_bc_0(&bc, 0, 0);
+    uint32_t p_main = emit_goto_16_fwd(&bc);
+
+    /* countdown(n) at pc = 4 */
+    uint32_t count_pc = bc.size;
+    emit_const_i32(&bc, 1, 0);
+    uint32_t p_base = emit_if_lez(&bc, 0);   /* if n <= 0 goto base */
+
+    emit_const_i32(&bc, 2, 1);
+    emit_sub_i32(&bc, 3, 0, 2);              /* r3 = n - 1 */
+    emit_call_bc_1(&bc, 4, count_pc, 3);     /* r4 = countdown(n - 1) */
+    emit_add_i32(&bc, 5, 2, 4);              /* r5 = 1 + countdown(n - 1) */
+    emit_ret(&bc, 5);
+
+    bc_patch_here(&bc, p_base);
+    emit_ret(&bc, 1);                        /* return 0 */
+
+    /* Main entry */
+    bc_patch_here(&bc, p_main);
+    emit_const_i32(&bc, 0, 250);             /* count 250 deep */
+    emit_call_bc_1(&bc, 1, count_pc, 0);     /* r1 = countdown(250) */
+    emit_return(&bc, 1);
+
+    VMRegister regs[6];
+    memset(regs, 0, sizeof(regs));
+
+    VMError err = bc_run_regs(&ctx, &bc, regs, 6);
+    check_err("deep recursion (250 deep) err == VM_OK", err, VM_OK);
+    check_i32("countdown(250) == 250", ctx.result.i32, 250);
+    check_u32("frame_capacity expanded >= 250", ctx.frame_capacity >= 250, 1);
+    check_u32("register_capacity expanded", ctx.register_capacity > 0, 1);
+
+    vm_cleanup(&ctx);
+    check_u32("vm_cleanup freed registers", ctx.registers == NULL, 1);
+    check_u32("vm_cleanup freed frames", ctx.frames == NULL, 1);
+}
+
+/*
+ * Test 5: VM Memory Lifecycle (vm_cleanup & vm_destroy)
+ */
+static void test_vm_cleanup(void)
+{
+    printf("\n--- test_vm_cleanup ---\n");
+
+    VMContext ctx;
+    vm_init(&ctx);
+
+    vm_register_function(&ctx, 0, NULL);
+
+    Bytecode bc;
+    bc_init(&bc);
+    emit_const_i32(&bc, 0, 42);
+    emit_return(&bc, 0);
 
     VMRegister regs[4];
     memset(regs, 0, sizeof(regs));
+    vm_execute(&ctx, regs, 4, 0, bc.data, bc.size);
 
-    VMError err = bc_run_regs(&ctx, &bc, regs, 4);
-    check_err("infinite recursion => VM_ERR_STACK_OVERFLOW", err, VM_ERR_STACK_OVERFLOW);
+    check_u32("registers allocated", ctx.registers != NULL, 1);
+    check_u32("native_funcs allocated", ctx.native_funcs != NULL, 1);
+
+    vm_destroy(&ctx);
+
+    check_u32("registers freed by vm_destroy", ctx.registers == NULL, 1);
+    check_u32("frames freed by vm_destroy", ctx.frames == NULL, 1);
+    check_u32("native_funcs freed by vm_destroy", ctx.native_funcs == NULL, 1);
+    check_u32("register_capacity reset", ctx.register_capacity == 0, 1);
+    check_u32("frame_capacity reset", ctx.frame_capacity == 0, 1);
 }
 
 int main(void)
@@ -202,7 +265,8 @@ int main(void)
     test_subroutine_call();
     test_recursive_factorial();
     test_recursive_fibonacci();
-    test_call_stack_overflow();
+    test_deep_recursion_and_dynamic_growth();
+    test_vm_cleanup();
     print_summary();
     return g_fail > 0 ? 1 : 0;
 }

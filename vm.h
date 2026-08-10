@@ -412,41 +412,51 @@ typedef void (*VMDebugHook)(struct VMContext* ctx, VMDebugEvent event, uint32_t 
 #endif
 
 /* =========================================================================
- * Call Frame (Bytecode Subroutines)
+ * Call Frame (Bytecode Subroutines) — Minimal 16-byte metadata frame
  * ====================================================================== */
 
 typedef struct VMFrame {
     uint32_t    return_pc;                        /* PC to resume in caller    */
-    uint8_t     dst_reg;                          /* caller's destination reg  */
-    uint32_t    reg_count;                        /* caller's register count   */
-    VMRegister  saved_regs[VM_MAX_FRAME_REGS];    /* saved caller registers    */
+    uint32_t    reg_base;                         /* base in shared registers  */
+    uint16_t    dst_reg;                          /* caller's destination reg  */
+    uint16_t    reg_count;                        /* caller's register count   */
 } VMFrame;
 
 typedef struct VMContext {
-    VMRegister  result;                           /* last RETURN / CALL value  */
-    uint32_t    pc;                               /* current program counter   */
-    uint32_t    flags;                            /* execution state flags     */
-    uint32_t    native_count;                     /* number of registered fns  */
-    VMNativeFn  native_funcs[VM_MAX_NATIVE_FUNCS];
-    void*       user_data;                        /* host-defined payload      */
+    VMRegister        result;                           /* last RETURN / CALL value  */
+    uint32_t          pc;                               /* current program counter   */
+    uint32_t          flags;                            /* execution state flags     */
+
+    /* Shared Register Window Arena */
+    VMRegister*       registers;                        /* shared register storage   */
+    uint32_t          register_count;                   /* total registers in use    */
+    uint32_t          register_capacity;                /* capacity of registers buf */
+
+    /* Dynamic Call Stack */
+    VMFrame*          frames;                           /* dynamic frame stack array */
+    uint32_t          call_depth;                       /* current call stack depth  */
+    uint32_t          frame_capacity;                   /* capacity of frames array  */
+
+    /* Dynamic Native Function Registry */
+    VMNativeFn*       native_funcs;                     /* dynamic function array    */
+    uint32_t          native_count;                     /* registered function count */
+    uint32_t          native_capacity;                  /* function array capacity   */
+
+    void*             user_data;                        /* host-defined payload      */
 
 #if defined(VM_DEBUG)
-    int         debug;                            /* non-zero: trace to stderr */
+    int               debug;                            /* non-zero: trace to stderr */
 
     /* Debugger interface */
-    VMDebugHook     debug_hook;                   /* event callback hook       */
-    const uint32_t* breakpoints;                  /* array of breakpoint PCs   */
-    uint32_t        breakpoint_count;             /* number of breakpoints     */
+    VMDebugHook       debug_hook;                       /* event callback hook       */
+    const uint32_t*   breakpoints;                      /* array of breakpoint PCs   */
+    uint32_t          breakpoint_count;                 /* number of breakpoints     */
 
     /* Profiler interface */
-    uint64_t    opcode_counts[VM_OPCODE_COUNT];   /* per-opcode execution count*/
-    uint64_t    total_instructions;               /* total instructions run    */
-    int         profiler_enabled;                 /* non-zero: enable profiler */
+    uint64_t          opcode_counts[VM_OPCODE_COUNT];   /* per-opcode execution count*/
+    uint64_t          total_instructions;               /* total instructions run    */
+    int               profiler_enabled;                 /* non-zero: enable profiler */
 #endif
-
-    /* Call Stack (OP_CALL_BC / OP_RET) */
-    VMFrame     call_stack[VM_MAX_CALL_DEPTH];    /* subroutine stack frames   */
-    uint32_t    call_depth;                       /* current call stack depth  */
 } VMContext;
 
 /* =========================================================================
@@ -456,9 +466,18 @@ typedef struct VMContext {
 /*
  * vm_init()
  *
- * Zero-initialize a VMContext.  Must be called before any other vm_* call.
+ * Zero-initialize a VMContext. Must be called before any other vm_* call.
  */
 void vm_init(VMContext* ctx);
+
+/*
+ * vm_cleanup() / vm_destroy()
+ *
+ * Releases all dynamically allocated memory in ctx (registers, call stack frames,
+ * native function registry).
+ */
+void vm_cleanup(VMContext* ctx);
+void vm_destroy(VMContext* ctx);
 
 /*
  * vm_register_function()
