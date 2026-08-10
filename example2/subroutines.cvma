@@ -1,0 +1,30 @@
+; =============================================================================
+; subroutines.cvma — Recursive Factorial & Subroutines in Text Assembly
+;
+; Computes recursive factorial of 6: 6! = 720
+; Expected result: r0 = 720
+; =============================================================================
+
+.version  1
+.registers 8
+
+.code
+    GOTO_16 main
+
+fact:
+    ; fact(n): r0 = n
+    CONST_I32 r1, 1
+    IF_LE r0, r1, base      ; if n <= 1 goto base
+
+    SUB_I32 r2, r0, r1      ; r2 = n - 1
+    CALL_BC r3, fact, 1, r2 ; r3 = fact(n-1)
+    MUL_I32 r4, r0, r3      ; r4 = n * fact(n-1)
+    RET r4
+
+base:
+    RET r1                  ; return 1
+
+main:
+    CONST_I32 r0, 6         ; n = 6
+    CALL_BC r5, fact, 1, r0 ; r5 = fact(6)
+    RETURN r5               ; return 720

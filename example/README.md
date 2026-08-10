@@ -36,7 +36,9 @@ example/
 ├── unsigned_ops.c      DIV_U32, REM_U32, DIV_U64, REM_U64, CMP_F32_GT tests
 ├── single_step.c       VMContext pc, flags, and single-step execution control
 ├── coroutines.c        Generator/Coroutine pattern using VM single-stepping
-└── benchmark.c         Performance benchmark measuring VM throughput (1M Collatz runs)
+├── benchmark.c         Performance benchmark measuring VM throughput (1M Collatz runs)
+├── debugger_profiler.c Debugger hooks, breakpoints, and profiler opcode counters
+└── subroutines.c       Bytecode subroutines, recursion, & stack frames (OP_CALL_BC / OP_RET)
 ```
 
 ---

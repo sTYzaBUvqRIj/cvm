@@ -23,6 +23,7 @@ example2/
 ├── unsigned_ops.cvma      Unsigned division/remainder and CMP_F32_GT
 ├── collatz.cvma           Collatz (3n+1) sequence stopping time algorithm
 ├── binary_search.cvma     Binary search over sorted array elements
+├── subroutines.cvma        Recursive assembly subroutines (OP_CALL_BC / OP_RET)
 ├── Makefile               Automates compilation, assembly, and execution
 └── README.md              This documentation file
 ```

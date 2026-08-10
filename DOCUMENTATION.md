@@ -1575,6 +1575,8 @@ void*   presult = ctx.result.ptr;
 | `OP_CALL_VOID` | 0x0061 | `[id:u32][argc:u8][r0..rN:u8]` | 7+argc |
 | `OP_RETURN_VOID` | 0x0062 | — | 2 |
 | `OP_RETURN`    | 0x0063 | `[src:u8]` | 3 |
+| `OP_CALL_BC`   | 0x0064 | `[dst:u8][target:u32][argc:u8][arg0..N:u8]` | 8+argc |
+| `OP_RET`       | 0x0065 | `[src:u8]` | 3 |
 
 ---
 

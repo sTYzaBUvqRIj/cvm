@@ -203,6 +203,7 @@ static int vm_assm_parse_opcode(const char* name, VMOpcode* out_op)
         { "IF_EQ", OP_IF_EQ }, { "IF_NE", OP_IF_NE }, { "IF_LT", OP_IF_LT }, { "IF_GE", OP_IF_GE }, { "IF_GT", OP_IF_GT }, { "IF_LE", OP_IF_LE },
         { "IF_EQZ", OP_IF_EQZ }, { "IF_NEZ", OP_IF_NEZ }, { "IF_LTZ", OP_IF_LTZ }, { "IF_GEZ", OP_IF_GEZ }, { "IF_GTZ", OP_IF_GTZ }, { "IF_LEZ", OP_IF_LEZ },
         { "CALL", OP_CALL }, { "CALL_VOID", OP_CALL_VOID },
+        { "CALL_BC", OP_CALL_BC }, { "RET", OP_RET }, { "RET_VOID", OP_RET },
         { "RETURN_VOID", OP_RETURN_VOID }, { "RETURN", OP_RETURN }
     };
     size_t count = sizeof(map) / sizeof(map[0]);
@@ -391,6 +392,22 @@ static int vm_assm_calc_inst_size(VMOpcode op, int num_tokens, char* tokens[])
             return 7 + argc;
         }
 
+        case OP_CALL_BC: {
+            /* tokens[0]=CALL_BC, tokens[1]=dst, tokens[2]=target_pc/label, tokens[3..N]=args */
+            if (num_tokens < 3) return 0;
+            int argc = num_tokens - 3;
+            if (num_tokens >= 4) {
+                int64_t explicit_argc = 0;
+                if (vm_assm_parse_int64(tokens[3], &explicit_argc)) {
+                    if (explicit_argc == num_tokens - 4) {
+                        argc = (int)explicit_argc;
+                    }
+                }
+            }
+            return 8 + argc;
+        }
+
+        case OP_RET:           return 3;
         case OP_RETURN_VOID:  return 2;
         case OP_RETURN:       return 3;
 
@@ -771,6 +788,64 @@ static VMAssembleResult vm_assemble(const char* source_text)
                         goto parse_err;
                     }
                     vm_assm_emit_u8(&res, (uint8_t)arg_reg);
+                }
+                break;
+            }
+
+            case OP_CALL_BC: {
+                uint16_t dst = 0;
+                if (ntok < 3 || !vm_assm_parse_reg(tokens[1], &dst)) {
+                    goto parse_err;
+                }
+                size_t target_pc = 0;
+                int64_t raw_pc = 0;
+                if (vm_assm_find_label(&labels, tokens[2], &target_pc)) {
+                    /* resolved target PC from label */
+                } else if (vm_assm_parse_int64(tokens[2], &raw_pc)) {
+                    target_pc = (size_t)raw_pc;
+                } else {
+                    res.success = 0;
+                    res.error_line = line_num;
+                    snprintf(res.error_msg, sizeof(res.error_msg), "Undefined label or invalid target PC '%s'", tokens[2]);
+                    if (res.bytecode) free(res.bytecode);
+                    res.bytecode = NULL;
+                    return res;
+                }
+
+                int start_arg_idx = 3;
+                int argc = ntok - 3;
+                if (ntok >= 4) {
+                    int64_t explicit_argc = 0;
+                    if (vm_assm_parse_int64(tokens[3], &explicit_argc)) {
+                        if (explicit_argc == ntok - 4) {
+                            argc = (int)explicit_argc;
+                            start_arg_idx = 4;
+                        }
+                    }
+                }
+
+                vm_assm_emit_u8(&res, (uint8_t)dst);
+                vm_assm_emit_u32(&res, (uint32_t)target_pc);
+                vm_assm_emit_u8(&res, (uint8_t)argc);
+                for (int i = 0; i < argc; i++) {
+                    uint16_t arg_reg = 0;
+                    if (!vm_assm_parse_reg(tokens[start_arg_idx + i], &arg_reg)) {
+                        goto parse_err;
+                    }
+                    vm_assm_emit_u8(&res, (uint8_t)arg_reg);
+                }
+                break;
+            }
+
+            case OP_RET: {
+                if (ntok < 2 || vm_assm_stricmp(tokens[1], "VOID") == 0) {
+                    vm_assm_emit_u8(&res, 0xFF);
+                } else {
+                    uint16_t src = 0;
+                    if (!vm_assm_parse_reg(tokens[1], &src)) {
+                        goto parse_err;
+                    }
+                    vm_assm_emit_u8(&res, (uint8_t)src);
                 }
                 break;
             }

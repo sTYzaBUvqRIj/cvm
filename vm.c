@@ -185,6 +185,8 @@ static const char* vm_opname(uint16_t op)
     case OP_CALL_VOID:    return "CALL_VOID";
     case OP_RETURN_VOID:  return "RETURN_VOID";
     case OP_RETURN:       return "RETURN";
+    case OP_CALL_BC:      return "CALL_BC";
+    case OP_RET:          return "RET";
     default:              return "??";
     }
 }
@@ -981,6 +983,84 @@ VMError vm_execute(
             ctx->flags |= VM_FLAG_HALTED;
             return VM_OK;
         }
+
+        /* ============================================================== */
+        /* OP_CALL_BC  [dst:u8][target:u32][argc:u8][arg0..N:u8]          */
+        /* ============================================================== */
+
+        case OP_CALL_BC: {
+            CHECK_BOUNDS(6);
+            const uint8_t  dst       = read8LE (bytecode + pc);
+            const uint32_t target_pc = read32LE(bytecode + pc + 1);
+            const uint8_t  argc      = read8LE (bytecode + pc + 5);
+            CHECK_BOUNDS(6u + (uint32_t)argc);
+            CHECK_REG(dst);
+            if (argc > VM_MAX_CALL_ARGC)             VM_EXIT_ERR(VM_ERR_BAD_ARGC);
+            if (target_pc >= bytecode_size)          VM_EXIT_ERR(VM_ERR_OUT_OF_BOUNDS);
+            if (ctx->call_depth >= VM_MAX_CALL_DEPTH) VM_EXIT_ERR(VM_ERR_STACK_OVERFLOW);
+
+            VMRegister call_args[VM_MAX_CALL_ARGC];
+            for (uint32_t i = 0; i < (uint32_t)argc; i++) {
+                const uint8_t ai = read8LE(bytecode + pc + 6 + i);
+                CHECK_REG(ai);
+                call_args[i] = regs[ai];
+            }
+
+            VMFrame* frame = &ctx->call_stack[ctx->call_depth];
+            frame->return_pc = pc + 6u + (uint32_t)argc;
+            frame->dst_reg   = dst;
+            frame->reg_count = reg_count;
+
+            const uint32_t save_regs_count = (reg_count < VM_MAX_FRAME_REGS) ? reg_count : VM_MAX_FRAME_REGS;
+            memcpy(frame->saved_regs, regs, save_regs_count * sizeof(VMRegister));
+
+            ctx->call_depth++;
+
+            memset(regs, 0, reg_count * sizeof(VMRegister));
+            for (uint32_t i = 0; i < (uint32_t)argc; i++) {
+                regs[i] = call_args[i];
+            }
+
+            pc = target_pc;
+        } break;
+
+        /* ============================================================== */
+        /* OP_RET  [src:u8] (src = 0xFF for void return)                  */
+        /* ============================================================== */
+
+        case OP_RET: {
+            CHECK_BOUNDS(1);
+            const uint8_t src = read8LE(bytecode + pc);
+            if (src != 0xFF) {
+                CHECK_REG(src);
+            }
+
+            if (ctx->call_depth == 0) {
+                if (src != 0xFF) {
+                    ctx->result = regs[src];
+                }
+                ctx->pc = pc;
+                ctx->flags &= ~VM_FLAG_RUNNING;
+                ctx->flags |= VM_FLAG_HALTED;
+                return VM_OK;
+            }
+
+            ctx->call_depth--;
+            const VMFrame* frame = &ctx->call_stack[ctx->call_depth];
+
+            VMRegister ret_val;
+            memset(&ret_val, 0, sizeof(ret_val));
+            if (src != 0xFF) {
+                ret_val = regs[src];
+            }
+
+            const uint32_t restore_count = (frame->reg_count < VM_MAX_FRAME_REGS) ? frame->reg_count : VM_MAX_FRAME_REGS;
+            memcpy(regs, frame->saved_regs, restore_count * sizeof(VMRegister));
+            regs[frame->dst_reg] = ret_val;
+            ctx->result          = ret_val;
+
+            pc = frame->return_pc;
+        } break;
 
         /* ============================================================== */
         /* Unknown opcode                                                  */

@@ -144,6 +144,8 @@ static const char* vm_opcode_name(VMOpcode op)
         case OP_CALL_VOID:    return "CALL_VOID";
         case OP_RETURN_VOID:  return "RETURN_VOID";
         case OP_RETURN:       return "RETURN";
+        case OP_CALL_BC:      return "CALL_BC";
+        case OP_RET:          return "RET";
         default:              return "UNKNOWN";
     }
 }
@@ -388,6 +390,33 @@ static int vm_disassemble_instruction_ext(const uint8_t* code, size_t size, size
                 written += snprintf(inst_text + written, sizeof(inst_text) - (size_t)written, ", r%u", code[pc + 7 + i]);
             }
             inst_len = 7 + argc;
+            break;
+        }
+        /* OP_CALL_BC: [op:u16][dst:u8][target:u32][argc:u8][r0..rN:u8] */
+        case OP_CALL_BC: {
+            if (pc + 8 > size) return 0;
+            uint8_t  dst  = code[pc + 2];
+            uint32_t target_pc = vm_disasm_u32(code + pc + 3);
+            uint8_t  argc = code[pc + 7];
+            if (pc + 8 + argc > size) return 0;
+
+            int written = snprintf(inst_text, sizeof(inst_text), "CALL_BC r%u, 0x%04X", dst, target_pc);
+            for (uint8_t i = 0; i < argc && written < (int)sizeof(inst_text) - 10; i++) {
+                written += snprintf(inst_text + written, sizeof(inst_text) - (size_t)written, ", r%u", code[pc + 8 + i]);
+            }
+            inst_len = 8 + argc;
+            break;
+        }
+        /* OP_RET */
+        case OP_RET: {
+            if (pc + 3 > size) return 0;
+            uint8_t src = code[pc + 2];
+            if (src == 0xFF) {
+                snprintf(inst_text, sizeof(inst_text), "RET VOID");
+            } else {
+                snprintf(inst_text, sizeof(inst_text), "RET r%u", src);
+            }
+            inst_len = 3;
             break;
         }
         /* Return */

@@ -100,8 +100,9 @@ cvm/
 │   ├── unsigned_ops.c          # Unsigned division/remainder & CMP_F32_GT
 │   ├── single_step.c           # Single-stepping & VMContext state control
 │   ├── coroutines.c            # Generator/Coroutine pattern via single-step
-│   └── benchmark.c             # High-throughput opcode execution benchmark
-├── example2/                   # Text Assembly (.cvma) test suite (14 files)
+│   ├── benchmark.c             # High-throughput opcode execution benchmark
+│   └── subroutines.c           # Subroutines, recursion, & call stack frames
+├── example2/                   # Text Assembly (.cvma) test suite (15 files)
 │   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)
 │   ├── basic.cvma              # Basic assembly instructions
 │   ├── arithmetic.cvma         # Assembly arithmetic ops
@@ -116,7 +117,8 @@ cvm/
 │   ├── complex_algo.cvma       # Euclidean GCD algorithm
 │   ├── unsigned_ops.cvma       # Unsigned ops & CMP_F32_GT assembly
 │   ├── collatz.cvma            # Collatz 3n+1 stopping time assembly
-│   └── binary_search.cvma      # Binary search algorithm assembly
+│   ├── binary_search.cvma      # Binary search algorithm assembly
+│   └── subroutines.cvma        # Recursive assembly subroutines
 ```
 
 ---
@@ -287,11 +289,8 @@ Copyright (C) 2026 CVM Contributors.
 
 ### Core VM
 
-- [ ] **Call stack / subroutines** — add `OP_CALL_BC` and `OP_RET` to call into
-      other bytecode functions (separate from native calls), enabling recursion and
-      multi-function programs
-- [ ] **Stack frames** — associated register save/restore for `OP_CALL_BC` so
-      callee registers don't clobber caller state
+- [x] **Call stack / subroutines** — `OP_CALL_BC` and `OP_RET` for calling bytecode subroutines and supporting recursion
+- [x] **Stack frames** — zero-allocation register frame save/restore (`VMFrame`, `call_stack`) for `OP_CALL_BC` so callee registers don't clobber caller state
 - [x] **Unsigned integer support** — `DIV_U32`, `REM_U32`, `DIV_U64`, `REM_U64`
       for unsigned division semantics
 - [x] **32-bit float comparisons** — `CMP_F32_GT` ordered variant to distinguish

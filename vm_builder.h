@@ -420,6 +420,35 @@ static void emit_call_void_n(Bytecode* bc, uint32_t id,
     for (i = 0; i < argc; i++) bc_u8(bc, args[i]);
 }
 
+/* --- Subroutines & Bytecode Calls ---------------------------------------- */
+static void emit_call_bc_n(Bytecode* bc, uint8_t dst, uint32_t target_pc,
+                            uint8_t argc, const uint8_t* args)
+{
+    uint8_t i;
+    bc_op(bc, OP_CALL_BC); bc_u8(bc, dst); bc_u32(bc, target_pc); bc_u8(bc, argc);
+    for (i = 0; i < argc; i++) bc_u8(bc, args[i]);
+}
+
+static void emit_call_bc_0(Bytecode* bc, uint8_t dst, uint32_t target_pc)
+{
+    emit_call_bc_n(bc, dst, target_pc, 0, NULL);
+}
+
+static void emit_call_bc_1(Bytecode* bc, uint8_t dst, uint32_t target_pc, uint8_t a0)
+{
+    const uint8_t args[1] = { a0 };
+    emit_call_bc_n(bc, dst, target_pc, 1, args);
+}
+
+static void emit_call_bc_2(Bytecode* bc, uint8_t dst, uint32_t target_pc, uint8_t a0, uint8_t a1)
+{
+    const uint8_t args[2] = { a0, a1 };
+    emit_call_bc_n(bc, dst, target_pc, 2, args);
+}
+
+static void emit_ret(Bytecode* bc, uint8_t src) { bc_op(bc, OP_RET); bc_u8(bc, src); }
+static void emit_ret_void(Bytecode* bc) { bc_op(bc, OP_RET); bc_u8(bc, 0xFF); }
+
 /* --- Return -------------------------------------------------------------- */
 static void emit_return_void(Bytecode* bc) { bc_op(bc, OP_RETURN_VOID); }
 static void emit_return(Bytecode* bc, uint8_t src) { bc_op(bc, OP_RETURN); bc_u8(bc, src); }

@@ -55,7 +55,8 @@ typedef enum {
     VM_ERR_DIV_ZERO         = 3,    /* integer division by zero           */
     VM_ERR_INVALID_REGISTER = 4,    /* register index >= reg_count        */
     VM_ERR_BAD_FUNCTION     = 5,    /* function id out of range / null    */
-    VM_ERR_BAD_ARGC         = 6     /* argc > VM_MAX_CALL_ARGC            */
+    VM_ERR_BAD_ARGC         = 6,    /* argc > VM_MAX_CALL_ARGC            */
+    VM_ERR_STACK_OVERFLOW   = 7     /* recursion depth > max call depth   */
 } VMError;
 
 /* =========================================================================
@@ -311,7 +312,14 @@ typedef enum {
     /* ------------------------------------------------------------------ */
 
     OP_RETURN_VOID,             /* (no operands)                          */
-    OP_RETURN                   /* [src:u8]  — sets ctx->result           */
+    OP_RETURN,                  /* [src:u8]  — sets ctx->result           */
+
+    /* ------------------------------------------------------------------ */
+    /*  Subroutines & Bytecode Calls                                       */
+    /* ------------------------------------------------------------------ */
+
+    OP_CALL_BC,                 /* [dst:u8][target:u32][argc:u8][arg0..N] */
+    OP_RET                      /* [src:u8] (src=0xFF for void)           */
 
 } VMOpcode;
 
@@ -371,6 +379,12 @@ typedef VMError (*VMNativeFn)(
 /** Maximum number of arguments per CALL / CALL_VOID instruction. */
 #define VM_MAX_CALL_ARGC      64
 
+/** Maximum call stack depth for bytecode subroutines (OP_CALL_BC). */
+#define VM_MAX_CALL_DEPTH    128
+
+/** Maximum registers saved per call frame. */
+#define VM_MAX_FRAME_REGS     64
+
 /* =========================================================================
  * Execution flags
  * ====================================================================== */
@@ -395,6 +409,17 @@ struct VMContext;
 /** Callback function pointer for debugger events. */
 typedef void (*VMDebugHook)(struct VMContext* ctx, VMDebugEvent event, uint32_t pc, uint16_t opcode);
 
+/* =========================================================================
+ * Call Frame (Bytecode Subroutines)
+ * ====================================================================== */
+
+typedef struct VMFrame {
+    uint32_t    return_pc;                        /* PC to resume in caller    */
+    uint8_t     dst_reg;                          /* caller's destination reg  */
+    uint32_t    reg_count;                        /* caller's register count   */
+    VMRegister  saved_regs[VM_MAX_FRAME_REGS];    /* saved caller registers    */
+} VMFrame;
+
 typedef struct VMContext {
     VMRegister  result;                           /* last RETURN / CALL value  */
     uint32_t    pc;                               /* current program counter   */
@@ -413,6 +438,10 @@ typedef struct VMContext {
     uint64_t    opcode_counts[VM_OPCODE_COUNT];   /* per-opcode execution count*/
     uint64_t    total_instructions;               /* total instructions run    */
     int         profiler_enabled;                 /* non-zero: enable profiler */
+
+    /* Call Stack (OP_CALL_BC / OP_RET) */
+    VMFrame     call_stack[VM_MAX_CALL_DEPTH];    /* subroutine stack frames   */
+    uint32_t    call_depth;                       /* current call stack depth  */
 } VMContext;
 
 /* =========================================================================

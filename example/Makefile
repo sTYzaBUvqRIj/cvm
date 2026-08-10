@@ -56,7 +56,8 @@ EXAMPLES = \
     single_step    \
     coroutines     \
     benchmark      \
-    debugger_profiler
+    debugger_profiler \
+    subroutines
 
 # Tools (separate from examples — vm_run is the standalone bytecode runner)
 TOOLS = vm_run
