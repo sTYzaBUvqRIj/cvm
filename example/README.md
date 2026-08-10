@@ -38,7 +38,8 @@ example/
 ├── coroutines.c        Generator/Coroutine pattern using VM single-stepping
 ├── benchmark.c         Performance benchmark measuring VM throughput (1M Collatz runs)
 ├── debugger_profiler.c Debugger hooks, breakpoints, and profiler opcode counters
-└── subroutines.c       Bytecode subroutines, recursion, & stack frames (OP_CALL_BC / OP_RET)
+├── subroutines.c       Bytecode subroutines, recursion, & stack frames (OP_CALL_BC / OP_RET)
+└── hash_algorithms.c   DJB2, FNV-1a 32-bit, and FNV-1a 64-bit hashing algorithms
 ```
 
 ---

@@ -78,7 +78,7 @@ cvm/
 │   ├── memory.c          LOAD*/STORE* — all widths, signed/unsigned
 │   ├── pointers.c        LEA, LOAD_PTR, STORE_PTR, pointer chains
 │   ├── native_functions.c CALL, CALL_VOID, native registration
-├── example/                    # C API test & example programs (24 standalone files)
+├── example/                    # C API test & example programs (25 standalone files)
 │   ├── vm_builder.h            # Dynamic bytecode emitter & test macro helpers
 │   ├── basic.c                 # Constants, register moves, NOP, return
 │   ├── arithmetic.c            # Integer arithmetic (i32/i64) & negation
@@ -103,8 +103,9 @@ cvm/
 │   ├── coroutines.c            # Generator/Coroutine pattern via single-step
 │   ├── benchmark.c             # High-throughput opcode execution benchmark
 │   ├── debugger_profiler.c     # Debugger hooks, breakpoints, & profiler report
-│   └── subroutines.c           # Subroutines, recursion, & call stack frames
-├── example2/                   # Text Assembly (.cvma) test suite (18 files)
+│   ├── subroutines.c           # Subroutines, recursion, & call stack frames
+│   └── hash_algorithms.c       # DJB2, FNV-1a 32-bit & FNV-1a 64-bit hashing
+├── example2/                   # Text Assembly (.cvma) test suite (19 files)
 │   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)
 │   ├── basic.cvma              # Basic assembly instructions
 │   ├── arithmetic.cvma         # Assembly arithmetic ops
@@ -123,7 +124,8 @@ cvm/
 │   ├── subroutines.cvma        # Recursive assembly subroutines
 │   ├── matrix_operations.cvma  # Subroutines, LEA, dot product & matrix trace
 │   ├── sorting_and_stats.cvma  # Conversions, float division & statistical mean
-│   └── pseudo_random_hash.cvma # PRNG LCG algorithm, bitwise hash & shifts
+│   ├── pseudo_random_hash.cvma # PRNG LCG algorithm, bitwise hash & shifts
+│   └── hash_algorithms.cvma    # DJB2, FNV-1a 32-bit & FNV-1a 64-bit assembly
 ```
 
 ---

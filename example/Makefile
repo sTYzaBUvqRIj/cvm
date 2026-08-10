@@ -57,7 +57,8 @@ EXAMPLES = \
     coroutines     \
     benchmark      \
     debugger_profiler \
-    subroutines
+    subroutines    \
+    hash_algorithms
 
 # Tools (separate from examples — vm_run is the standalone bytecode runner)
 TOOLS = vm_run

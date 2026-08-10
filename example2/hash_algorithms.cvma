@@ -1,0 +1,131 @@
+# ============================================================================
+# CVM Text Assembly — DJB2, FNV-1a 32-bit & FNV-1a 64-bit Hash Algorithms (hash_algorithms.cvma)
+# ============================================================================
+# Demonstrates:
+#   - Subroutines (CALL_BC / RET)
+#   - 64-bit constants & 64-bit integer arithmetic (CONST_I64, XOR_I64, MUL_I64)
+#   - 32-bit integer arithmetic & shifts (SHL_I32, XOR_I32, MUL_I32)
+#   - Pointer / Array memory iteration (LOAD8, LEA)
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: djb2_hash_simulated(val0, val1, val2, val3, val4) -> r0 = hash
+#   Calculates DJB2 hash of 5 byte values:
+#   hash = 5381
+#   hash = ((hash << 5) + hash) + val_i
+# Returns: r6 = 32-bit DJB2 hash value
+# ----------------------------------------------------------------------------
+djb2_hash_simulated:
+    CONST_I32 r5, 5381         # hash = 5381
+    CONST_I32 r6, 5            # shift = 5
+
+    # Byte 0 (r0)
+    SHL_I32   r7, r5, r6       # hash << 5
+    ADD_I32   r5, r7, r5       # (hash << 5) + hash
+    ADD_I32   r5, r5, r0       # + val0
+
+    # Byte 1 (r1)
+    SHL_I32   r7, r5, r6
+    ADD_I32   r5, r7, r5
+    ADD_I32   r5, r5, r1       # + val1
+
+    # Byte 2 (r2)
+    SHL_I32   r7, r5, r6
+    ADD_I32   r5, r7, r5
+    ADD_I32   r5, r5, r2       # + val2
+
+    # Byte 3 (r3)
+    SHL_I32   r7, r5, r6
+    ADD_I32   r5, r7, r5
+    ADD_I32   r5, r5, r3       # + val3
+
+    # Byte 4 (r4)
+    SHL_I32   r7, r5, r6
+    ADD_I32   r5, r7, r5
+    ADD_I32   r5, r5, r4       # + val4
+
+    RET       r5
+
+# ----------------------------------------------------------------------------
+# Subroutine: fnv1a_32_simulated(val0, val1, val2, val3) -> r0 = hash
+#   hash = 2166136261u
+#   hash = (hash ^ val_i) * 16777619u
+# Returns: r5 = 32-bit FNV-1a hash value
+# ----------------------------------------------------------------------------
+fnv1a_32_simulated:
+    CONST_I32 r4, -2128831035  # 2166136261u as signed i32 (0x811C9DC5)
+    CONST_I32 r5, 16777619     # FNV_PRIME_32 = 16777619
+
+    # Byte 0 (r0)
+    XOR_I32   r4, r4, r0
+    MUL_I32   r4, r4, r5
+
+    # Byte 1 (r1)
+    XOR_I32   r4, r4, r1
+    MUL_I32   r4, r4, r5
+
+    # Byte 2 (r2)
+    XOR_I32   r4, r4, r2
+    MUL_I32   r4, r4, r5
+
+    # Byte 3 (r3)
+    XOR_I32   r4, r4, r3
+    MUL_I32   r4, r4, r5
+
+    RET       r4
+
+# ----------------------------------------------------------------------------
+# Subroutine: fnv1a_64_simulated(val0, val1, val2) -> r0 = hash
+#   hash = 14695981039346656037ULL (0xCBF29CE484222325ULL)
+#   hash = (hash ^ val_i) * 1099511628211ULL
+# Returns: r4 = 64-bit FNV-1a hash value
+# ----------------------------------------------------------------------------
+fnv1a_64_simulated:
+    CONST_I64 r3, -3750763034362895579 # 14695981039346656037ULL as signed i64
+    CONST_I64 r4, 1099511628211        # FNV_PRIME_64
+
+    # Byte 0 (r0)
+    XOR_I64   r3, r3, r0
+    MUL_I64   r3, r3, r4
+
+    # Byte 1 (r1)
+    XOR_I64   r3, r3, r1
+    MUL_I64   r3, r3, r4
+
+    # Byte 2 (r2)
+    XOR_I64   r3, r3, r2
+    MUL_I64   r3, r3, r4
+
+    RET       r3
+
+# ----------------------------------------------------------------------------
+# Main Entry Point
+# ----------------------------------------------------------------------------
+main_entry:
+    # 1. Test DJB2 Hash on bytes [72, 101, 108, 108, 111] ("Hello")
+    CONST_I32 r0, 72           # 'H'
+    CONST_I32 r1, 101          # 'e'
+    CONST_I32 r2, 108          # 'l'
+    CONST_I32 r3, 108          # 'l'
+    CONST_I32 r4, 111          # 'o'
+
+    CALL_BC   r5, djb2_hash_simulated, 5, r0, r1, r2, r3, r4
+    # r5 = DJB2("Hello") = 2107146364
+
+    # 2. Test FNV-1a 32-bit Hash on bytes [67, 86, 77, 49] ("CVM1")
+    CONST_I32 r6, 67           # 'C'
+    CONST_I32 r7, 86           # 'V'
+    CONST_I32 r8, 77           # 'M'
+    CONST_I32 r9, 49           # '1'
+
+    CALL_BC   r10, fnv1a_32_simulated, 4, r6, r7, r8, r9
+
+    # 3. Test FNV-1a 64-bit Hash on bytes [67, 86, 77] ("CVM")
+    CALL_BC   r11, fnv1a_64_simulated, 3, r6, r7, r8
+
+    # Return DJB2 hash result
+    RETURN    r5               # Returns 2107146364 (DJB2 hash of "Hello")

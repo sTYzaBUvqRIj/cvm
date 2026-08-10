@@ -27,6 +27,7 @@ example2/
 ├── matrix_operations.cvma  Subroutines, LEA pointer arithmetic, dot product & matrix trace
 ├── sorting_and_stats.cvma  Type conversions, double float division & statistical mean
 ├── pseudo_random_hash.cvma PRNG LCG algorithm, bitwise hash pipeline & bit shifts
+├── hash_algorithms.cvma    DJB2, FNV-1a 32-bit, and FNV-1a 64-bit assembly subroutines
 ├── Makefile               Automates compilation, assembly, and execution
 └── README.md              This documentation file
 ```
@@ -50,7 +51,7 @@ This compiles `cvma2cvmb` and assembles every `.cvma` file into a corresponding 
 make run
 ```
 
-This assembles all 18 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
+This assembles all 19 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
 
 ### 3. Assemble a Single File Manually
 
