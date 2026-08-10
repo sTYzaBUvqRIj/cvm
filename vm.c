@@ -43,6 +43,7 @@ static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m)
  * Bounds / register / execution exit helpers
  * ====================================================================== */
 
+#if defined(VM_DEBUG)
 #define VM_EXIT_ERR(err_code) \
     do { \
         ctx->pc = pc; \
@@ -53,6 +54,15 @@ static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m)
         } \
         return (err_code); \
     } while (0)
+#else
+#define VM_EXIT_ERR(err_code) \
+    do { \
+        ctx->pc = pc; \
+        ctx->flags &= ~VM_FLAG_RUNNING; \
+        ctx->flags |= VM_FLAG_HALTED; \
+        return (err_code); \
+    } while (0)
+#endif
 
 #define CHECK_BOUNDS(needed) \
     do { \
@@ -82,6 +92,7 @@ static inline int64_t  read64SLE(const uint8_t* m) { return (int64_t)read64LE(m)
  * preprocessor guard so no dead-code warning is generated.
  * ====================================================================== */
 
+#if defined(VM_DEBUG)
 static const char* vm_opname(uint16_t op)
 {
     switch (op) {
@@ -190,6 +201,7 @@ static const char* vm_opname(uint16_t op)
     default:              return "??";
     }
 }
+#endif
 
 /* =========================================================================
  * API
@@ -240,9 +252,11 @@ VMError vm_execute(
         /* ----------------------------------------------------------------
          * Read the 16-bit opcode.
          * ------------------------------------------------------------ */
-        const uint32_t instr_pc = pc;
         CHECK_BOUNDS(2);
         op = read16LE(bytecode + pc);
+
+#if defined(VM_DEBUG)
+        const uint32_t instr_pc = pc;
 
         /* Profiler accounting */
         if (ctx->profiler_enabled && op < VM_OPCODE_COUNT) {
@@ -266,12 +280,11 @@ VMError vm_execute(
             ctx->debug_hook(ctx, VM_DEBUG_EVENT_STEP, instr_pc, op);
         }
 
-        pc += 2;
-
-#if defined(VM_DEBUG)
         if (ctx->debug)
             fprintf(stderr, "PC=0x%04X  OP=%s\n", instr_pc, vm_opname(op));
 #endif
+
+        pc += 2;
 
         /* ----------------------------------------------------------------
          * Dispatch
@@ -1085,8 +1098,9 @@ VMError vm_execute(
     return VM_OK;
 }
 
+#if defined(VM_DEBUG)
 /* =========================================================================
- * Debugger & Profiler Implementations
+ * Debugger & Profiler Implementations (compiled only when -DVM_DEBUG is set)
  * ====================================================================== */
 
 int vm_has_breakpoint(const VMContext* ctx, uint32_t pc)
@@ -1162,3 +1176,4 @@ void vm_profiler_dump(const VMContext* ctx, FILE* stream)
     }
     fprintf(stream, "============================================================\n\n");
 }
+#endif

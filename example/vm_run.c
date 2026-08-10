@@ -107,8 +107,13 @@ int main(int argc, char** argv)
     /* ---- set up context ---- */
     VMContext ctx;
     vm_init(&ctx);
+#if defined(VM_DEBUG)
     ctx.debug = debug;
     ctx.profiler_enabled = profile;
+#else
+    (void)debug;
+    (void)profile;
+#endif
     vm_register_stdlib(&ctx);
 
     /* ---- allocate + zero registers ---- */
@@ -138,9 +143,11 @@ int main(int argc, char** argv)
     if (err != VM_OK) {
         fprintf(stderr, "[vm_run] error: %s (code %d)\n",
                 vm_error_str(err), (int)err);
+#if defined(VM_DEBUG)
         if (profile) {
             vm_profiler_dump(&ctx, stdout);
         }
+#endif
         free(regs);
         cvmb_free(code);
         return (int)err;
@@ -160,9 +167,11 @@ int main(int argc, char** argv)
         ctx.result.f64,
         ctx.result.ptr);
 
+#if defined(VM_DEBUG)
     if (profile) {
         vm_profiler_dump(&ctx, stdout);
     }
+#endif
 
     free(regs);
     cvmb_free(code);

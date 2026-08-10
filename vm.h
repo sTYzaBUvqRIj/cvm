@@ -395,9 +395,10 @@ typedef VMError (*VMNativeFn)(
 #define VM_FLAG_HALTED       (1u << 3)  /* execution has halted / finished    */
 
 /* =========================================================================
- * Debugger interface
+ * Debugger & Profiler interface (enabled when compiled with -DVM_DEBUG)
  * ====================================================================== */
 
+#if defined(VM_DEBUG)
 typedef enum VMDebugEvent {
     VM_DEBUG_EVENT_STEP,       /* executed single instruction                 */
     VM_DEBUG_EVENT_BREAKPOINT, /* hit breakpoint address                       */
@@ -408,6 +409,7 @@ struct VMContext;
 
 /** Callback function pointer for debugger events. */
 typedef void (*VMDebugHook)(struct VMContext* ctx, VMDebugEvent event, uint32_t pc, uint16_t opcode);
+#endif
 
 /* =========================================================================
  * Call Frame (Bytecode Subroutines)
@@ -427,6 +429,8 @@ typedef struct VMContext {
     uint32_t    native_count;                     /* number of registered fns  */
     VMNativeFn  native_funcs[VM_MAX_NATIVE_FUNCS];
     void*       user_data;                        /* host-defined payload      */
+
+#if defined(VM_DEBUG)
     int         debug;                            /* non-zero: trace to stderr */
 
     /* Debugger interface */
@@ -438,6 +442,7 @@ typedef struct VMContext {
     uint64_t    opcode_counts[VM_OPCODE_COUNT];   /* per-opcode execution count*/
     uint64_t    total_instructions;               /* total instructions run    */
     int         profiler_enabled;                 /* non-zero: enable profiler */
+#endif
 
     /* Call Stack (OP_CALL_BC / OP_RET) */
     VMFrame     call_stack[VM_MAX_CALL_DEPTH];    /* subroutine stack frames   */
@@ -495,8 +500,9 @@ VMError vm_execute(
     uint32_t       bytecode_size
 );
 
+#if defined(VM_DEBUG)
 /* =========================================================================
- * Debugger & Profiler API
+ * Debugger & Profiler API (compiled only when -DVM_DEBUG is set)
  * ====================================================================== */
 
 /** Returns 1 if pc matches a breakpoint in ctx->breakpoints, 0 otherwise. */
@@ -507,6 +513,7 @@ void vm_profiler_reset(VMContext* ctx);
 
 /** Dump formatted profiler report (top executed opcodes, totals) to stream. */
 void vm_profiler_dump(const VMContext* ctx, FILE* stream);
+#endif
 
 #ifdef __cplusplus
 }

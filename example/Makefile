@@ -85,9 +85,13 @@ all: $(BINS) $(TBINS)
 %$(EXE_EXT): %.c ../vm_builder.h ../vm_loader.h ../vm_assembler.h ../vm_disassembler.h $(VM_SRC)
 	$(CC) $(CFLAGS) -o $@ $< $(VM_SRC) $(LDFLAGS)
 
-# vm_run: the standalone bytecode runner (no -lm needed)
+# debugger_profiler requires -DVM_DEBUG to enable debugger hooks and profiler API
+debugger_profiler$(EXE_EXT): debugger_profiler.c ../vm_builder.h $(VM_SRC)
+	$(CC) $(CFLAGS) -DVM_DEBUG -o $@ debugger_profiler.c $(VM_SRC) $(LDFLAGS)
+
+# vm_run: the standalone bytecode runner with debug & profiler support
 vm_run$(EXE_EXT): vm_run.c ../vm_loader.h $(VM_SRC)
-	$(CC) $(CFLAGS) -o $@ vm_run.c $(VM_SRC)
+	$(CC) $(CFLAGS) -DVM_DEBUG -o $@ vm_run.c $(VM_SRC) $(LDFLAGS)
 
 # -----------------------------------------------------------------------
 # Run all examples
