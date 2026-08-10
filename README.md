@@ -26,7 +26,7 @@ not expressible in bytecode.
 - **Two-file core implementation** — everything in `vm.h` + `vm.c`
 - **Register-based** — no operand stack; all values live in a flat register file
 - **Untyped 64-bit registers** — each register is a union of all C primitive types
-- **100 opcodes** covering:
+- **102 opcodes** covering:
   - Integer arithmetic and logic (i32 and i64, signed and unsigned)
   - Floating-point arithmetic (f32 and f64, IEEE-754)
   - Bitwise operations and shifts (arithmetic and logical)
@@ -37,6 +37,7 @@ not expressible in bytecode.
   - Conditional branches (12 variants: register-pair and vs-zero)
   - Unconditional branches (3 range sizes: i8, i16, i32 offset)
   - Native function calls with up to 64 arguments
+  - Bytecode subroutines (`OP_CALL_BC` / `OP_RET`) & recursion with register frame save/restore
 - **Two-pass Assembler (`vm_assembler.h`)** — converts text assembly (`.cvma`) to binary bytecode (`.cvmb`)
 - **Disassembler (`vm_disassembler.h`)** — decodes binary bytecode into human-readable text assembly
 - **Host integration** — pre-load registers with host pointers; read results back
@@ -77,7 +78,7 @@ cvm/
 │   ├── memory.c          LOAD*/STORE* — all widths, signed/unsigned
 │   ├── pointers.c        LEA, LOAD_PTR, STORE_PTR, pointer chains
 │   ├── native_functions.c CALL, CALL_VOID, native registration
-├── example/                    # C API test & example programs (22 standalone files)
+├── example/                    # C API test & example programs (24 standalone files)
 │   ├── vm_builder.h            # Dynamic bytecode emitter & test macro helpers
 │   ├── basic.c                 # Constants, register moves, NOP, return
 │   ├── arithmetic.c            # Integer arithmetic (i32/i64) & negation
@@ -101,6 +102,7 @@ cvm/
 │   ├── single_step.c           # Single-stepping & VMContext state control
 │   ├── coroutines.c            # Generator/Coroutine pattern via single-step
 │   ├── benchmark.c             # High-throughput opcode execution benchmark
+│   ├── debugger_profiler.c     # Debugger hooks, breakpoints, & profiler report
 │   └── subroutines.c           # Subroutines, recursion, & call stack frames
 ├── example2/                   # Text Assembly (.cvma) test suite (15 files)
 │   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)

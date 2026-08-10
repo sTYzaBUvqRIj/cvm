@@ -35,6 +35,7 @@ Complete reference for every instruction in the VM bytecode instruction set.
    - [Conditional Branches — vs Zero](#conditional-branches--vs-zero)
    - [Native Function Calls](#native-function-calls)
    - [Return](#return)
+   - [Subroutines & Bytecode Calls](#subroutines--bytecode-calls)
 6. [Opcode Encoding Summary](#opcode-encoding-summary)
 7. [Public API](#public-api)
 
@@ -168,6 +169,7 @@ via `memset`). The host can pre-load registers with pointer values before callin
 | `VM_ERR_INVALID_REGISTER` | 4 | An instruction references a register index `>= reg_count` |
 | `VM_ERR_BAD_FUNCTION` | 5 | `CALL`/`CALL_VOID` with an unregistered function id, a null slot, or `id >= 256` |
 | `VM_ERR_BAD_ARGC` | 6 | `CALL`/`CALL_VOID` with `argc > VM_MAX_CALL_ARGC` (64) |
+| `VM_ERR_STACK_OVERFLOW` | 7 | Subroutine call depth exceeds `VM_MAX_CALL_DEPTH` (128) |
 
 > **Note:** Float division by zero is **not** an error — it produces `Inf` or `NaN`
 > per IEEE-754. Only integer division by zero traps.
@@ -1467,6 +1469,41 @@ emit_return(&bc, 0);  // return r0
 int32_t result  = ctx.result.i32;
 double  fresult = ctx.result.f64;
 void*   presult = ctx.result.ptr;
+```
+
+---
+
+### Subroutines & Bytecode Calls
+
+---
+
+#### `OP_CALL_BC` — Call Bytecode Subroutine
+
+```
+Encoding:  [op:u16][dst:u8][target:u32][argc:u8][arg0:u8]...[argN:u8]
+Size:      8 + argc bytes
+```
+
+Calls a bytecode function at `target` (uint32_t byte offset). Saves caller registers and return PC to `ctx->call_stack`, sets up `argc` argument registers in callee frame (`regs[0..argc-1]`), and transfers execution to `target`.
+
+```c
+emit_call_bc_1(&bc, 3, target_pc, 0); // call function at target_pc with r0, store result in r3
+```
+
+---
+
+#### `OP_RET` — Return from Subroutine
+
+```
+Encoding:  [op:u16][src:u8]
+Size:      3 bytes
+```
+
+Pops top frame from `ctx->call_stack`, restores caller registers, writes return value `regs[src]` into caller's `dst` register, and resumes caller execution at `return_pc`. If `src == 0xFF`, performs a void return.
+
+```c
+emit_ret(&bc, 4);      // return regs[4] to caller
+emit_ret_void(&bc);   // void return to caller
 ```
 
 ---

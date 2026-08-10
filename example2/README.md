@@ -47,7 +47,7 @@ This compiles `cvma2cvmb` and assembles every `.cvma` file into a corresponding 
 make run
 ```
 
-This assembles all 12 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
+This assembles all 15 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
 
 ### 3. Assemble a Single File Manually
 

@@ -318,8 +318,10 @@ VMError err = bc_run_regs(&ctx, &bc, regs, 4);
 | `OP_CALL_VOID` | `native_functions.c`, `loops.c` | ✓ result in ctx |
 | `OP_RETURN_VOID` | `basic.c`, `error_handling.c` | ✓ |
 | `OP_RETURN` | `basic.c`, all | ✓ |
+| `OP_CALL_BC` | `subroutines.c` | ✓ bytecode subroutines & recursion |
+| `OP_RET` | `subroutines.c` | ✓ stack frame register save/restore |
 
-**All 100 implemented opcodes are covered.**
+**All 102 implemented opcodes are covered.**
 
 ---
 
@@ -334,6 +336,7 @@ VMError err = bc_run_regs(&ctx, &bc, regs, 4);
 | `VM_ERR_INVALID_REGISTER` (4) | `error_handling.c` |
 | `VM_ERR_BAD_FUNCTION` (5) | `error_handling.c` — id out of range + null slot |
 | `VM_ERR_BAD_ARGC` (6) | `error_handling.c` |
+| `VM_ERR_STACK_OVERFLOW` (7) | `subroutines.c` — recursion depth > 128 |
 
 ---
 
