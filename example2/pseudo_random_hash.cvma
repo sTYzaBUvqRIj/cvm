@@ -1,0 +1,67 @@
+# ============================================================================
+# CVM Text Assembly — PRNG & Bitwise Hash Algorithm (pseudo_random_hash.cvma)
+# ============================================================================
+# Demonstrates:
+#   - Bitwise operations (AND_I32, OR_I32, XOR_I32, NOT_I32)
+#   - Shifts (SHL_I32, SHR_I32, USHR_I32)
+#   - Linear Congruential PRNG + Bit Hashing Pipeline
+#   - Subroutine composition (CALL_BC / RET)
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: prng_lcg_step(state) -> r0 = next_state
+#   next_state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+# ----------------------------------------------------------------------------
+prng_lcg_step:
+    CONST_I32 r1, 1103515245
+    CONST_I32 r2, 12345
+    MUL_I32   r3, r0, r1
+    ADD_I32   r3, r3, r2
+    CONST_I32 r4, 2147483647 # 0x7FFFFFFF mask
+    AND_I32   r5, r3, r4
+    RET       r5
+
+# ----------------------------------------------------------------------------
+# Subroutine: mix_bits(hash_val) -> r0 = mixed_hash
+#   Applies bit shifts, XOR, and bitwise NOT to mix bit entropy
+# ----------------------------------------------------------------------------
+mix_bits:
+    CONST_I32 r1, 13
+    SHL_I32   r2, r0, r1      # r2 = hash << 13
+    XOR_I32   r3, r0, r2      # r3 = hash ^ (hash << 13)
+
+    CONST_I32 r4, 17
+    USHR_I32  r5, r3, r4      # r5 = r3 >>> 17
+    XOR_I32   r6, r3, r5      # r6 = r3 ^ (r3 >>> 17)
+
+    NOT_I32   r7, r6          # r7 = ~r6 (bitwise NOT)
+    RET       r7
+
+# ----------------------------------------------------------------------------
+# Main Entry Point
+# ----------------------------------------------------------------------------
+main_entry:
+    # Initial seed = 42
+    CONST_I32 r0, 42
+
+    # Step 1: LCG step 1
+    CALL_BC   r1, prng_lcg_step, 1, r0      # r1 = prng(42)
+
+    # Step 2: LCG step 2
+    CALL_BC   r2, prng_lcg_step, 1, r1      # r2 = prng(r1)
+
+    # Step 3: LCG step 3
+    CALL_BC   r3, prng_lcg_step, 1, r2      # r3 = prng(r2)
+
+    # Step 4: Mix bits of final PRNG state
+    CALL_BC   r4, mix_bits, 1, r3           # r4 = mixed hash
+
+    # Mask low 16 bits to get deterministic result
+    CONST_I32 r5, 65535                     # 0xFFFF mask
+    AND_I32   r6, r4, r5                    # r6 = hash & 0xFFFF
+
+    RETURN    r6                            # Returns final masked hash

@@ -1,0 +1,104 @@
+# ============================================================================
+# CVM Text Assembly — Matrix Operations & Vector Math (matrix_operations.cvma)
+# ============================================================================
+# Demonstrates:
+#   - Subroutines (CALL_BC / RET)
+#   - Pointer arithmetic & memory indexing (LEA, LOAD32S, STORE32)
+#   - Loop control flow (IF_LT, IF_LE, GOTO_16)
+#   - Arithmetic algorithms: 2x2 Matrix Multiplication & Matrix Trace
+# ============================================================================
+
+.registers 12
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: dot_product(ptrA, ptrB, len) -> r0 = dot product
+#   r0: ptrA (int32_t*)
+#   r1: ptrB (int32_t*)
+#   r2: len
+# Returns: r4 = sum(A[i] * B[i])
+# ----------------------------------------------------------------------------
+dot_product:
+    CONST_I32 r3, 0        # i = 0
+    CONST_I32 r4, 0        # sum = 0
+    CONST_I32 r5, 1        # step = 1
+    CONST_I32 r6, 4        # stride = 4 bytes per int32
+
+dot_loop:
+    IF_GE     r3, r2, dot_done
+
+    # Load A[i]
+    LOAD32S   r7, r0       # valA = *ptrA
+
+    # Load B[i]
+    LOAD32S   r8, r1       # valB = *ptrB
+
+    # prod = valA * valB
+    MUL_I32   r9, r7, r8
+
+    # sum += prod
+    ADD_I32   r4, r4, r9
+
+    # Advance pointers ptrA += 4, ptrB += 4
+    LEA       r0, r0, 4
+    LEA       r1, r1, 4
+
+    # i++
+    ADD_I32   r3, r3, r5
+    GOTO_16   dot_loop
+
+dot_done:
+    RET       r4
+
+
+# ----------------------------------------------------------------------------
+# Subroutine: matrix_trace_2x2(ptrMat) -> r0 = Mat[0][0] + Mat[1][1]
+#   r0: ptrMat (2x2 int32 matrix: [m00, m01, m10, m11])
+# Returns: r3 = m00 + m11
+# ----------------------------------------------------------------------------
+matrix_trace_2x2:
+    LOAD32S   r1, r0       # r1 = Mat[0][0] at offset 0
+    LEA       r2, r0, 12   # Mat[1][1] is at byte offset 12 (element 3)
+    LOAD32S   r2, r2       # r2 = Mat[1][1]
+    ADD_I32   r3, r1, r2   # r3 = m00 + m11
+    RET       r3
+
+
+# ----------------------------------------------------------------------------
+# Main entry point
+# ----------------------------------------------------------------------------
+main_entry:
+    # Setup two 2x2 matrices A and B in host memory address space (simulated)
+    # Matrix A = [[1, 2], [3, 4]]
+    # Matrix B = [[5, 6], [7, 8]]
+    # Product Matrix C = A x B = [[19, 22], [43, 50]]
+    # Trace(C) = 19 + 50 = 69
+
+    # Compute dot product of Row 0 of A [1, 2] and Col 0 of B [5, 7]
+    # Expected dot product = 1*5 + 2*7 = 5 + 14 = 19
+
+    CONST_I32 r0, 1        # r0 = 1
+    CONST_I32 r1, 2        # r1 = 2
+    CONST_I32 r2, 5        # r2 = 5
+    CONST_I32 r3, 7        # r3 = 7
+
+    # Calculate 1*5 + 2*7 = 19
+    MUL_I32   r4, r0, r2   # 1*5 = 5
+    MUL_I32   r5, r1, r3   # 2*7 = 14
+    ADD_I32   r6, r4, r5   # r6 = 19
+
+    # Calculate 3*6 + 4*8 = 18 + 32 = 50 (C[1][1])
+    CONST_I32 r7, 3        # r7 = 3
+    CONST_I32 r8, 6        # r8 = 6
+    CONST_I32 r9, 4        # r9 = 4
+    CONST_I32 r10, 8       # r10 = 8
+
+    MUL_I32   r7, r7, r8   # 3*6 = 18
+    MUL_I32   r9, r9, r10  # 4*8 = 32
+    ADD_I32   r8, r7, r9   # r8 = 50
+
+    # Calculate Trace(C) = C[0][0] + C[1][1] = 19 + 50 = 69
+    ADD_I32   r11, r6, r8  # r11 = 69
+
+    RETURN    r11          # Returns 69

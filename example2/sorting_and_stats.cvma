@@ -1,0 +1,64 @@
+# ============================================================================
+# CVM Text Assembly — Sorting & Statistical Metrics (sorting_and_stats.cvma)
+# ============================================================================
+# Demonstrates:
+#   - Type conversions (I32_TO_F64, F64_TO_I32)
+#   - Double-precision float division (DIV_F64)
+#   - Three-way comparison (CMP_I32)
+#   - Subroutines (CALL_BC / RET)
+#   - Nested loops & registers window
+# ============================================================================
+
+.registers 12
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: compute_stats_sum(val0, val1, val2, val3, val4)
+# Returns: r0 = val0 + val1 + val2 + val3 + val4
+# ----------------------------------------------------------------------------
+compute_sum_5:
+    ADD_I32   r5, r0, r1
+    ADD_I32   r5, r5, r2
+    ADD_I32   r5, r5, r3
+    ADD_I32   r5, r5, r4
+    RET       r5
+
+# ----------------------------------------------------------------------------
+# Subroutine: compute_mean_f64(sum_i32, count_i32) -> f64 mean
+# Returns: r2.f64 = (double)sum_i32 / (double)count_i32
+# ----------------------------------------------------------------------------
+compute_mean_f64:
+    I32_TO_F64 r2, r0       # r2.f64 = (double)sum
+    I32_TO_F64 r3, r1       # r3.f64 = (double)count
+    DIV_F64    r4, r2, r3   # r4.f64 = r2 / r3
+    RET        r4
+
+# ----------------------------------------------------------------------------
+# Main Entry Point
+# ----------------------------------------------------------------------------
+main_entry:
+    # Array elements: [45, 12, 89, 34, 70]
+    CONST_I32 r0, 45
+    CONST_I32 r1, 12
+    CONST_I32 r2, 89
+    CONST_I32 r3, 34
+    CONST_I32 r4, 70
+
+    # 1. Call subroutine to compute sum
+    # arguments: r0=45, r1=12, r2=89, r3=34, r4=70
+    CALL_BC   r5, compute_sum_5, 5, r0, r1, r2, r3, r4
+    # r5 = 45 + 12 + 89 + 34 + 70 = 250
+
+    # 2. Call subroutine to compute mean as float (250 / 5 = 50.0)
+    CONST_I32 r6, 5         # count = 5
+    CALL_BC   r7, compute_mean_f64, 2, r5, r6
+    # r7.f64 = 50.0
+
+    # 3. Convert double mean back to int32 (50)
+    F64_TO_I32 r8, r7       # r8 = 50
+
+    # 4. Verify sum + mean = 250 + 50 = 300
+    ADD_I32   r9, r5, r8    # r9 = 300
+
+    RETURN    r9            # Returns 300

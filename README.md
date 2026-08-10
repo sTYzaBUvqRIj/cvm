@@ -104,7 +104,7 @@ cvm/
 │   ├── benchmark.c             # High-throughput opcode execution benchmark
 │   ├── debugger_profiler.c     # Debugger hooks, breakpoints, & profiler report
 │   └── subroutines.c           # Subroutines, recursion, & call stack frames
-├── example2/                   # Text Assembly (.cvma) test suite (15 files)
+├── example2/                   # Text Assembly (.cvma) test suite (18 files)
 │   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)
 │   ├── basic.cvma              # Basic assembly instructions
 │   ├── arithmetic.cvma         # Assembly arithmetic ops
@@ -120,7 +120,10 @@ cvm/
 │   ├── unsigned_ops.cvma       # Unsigned ops & CMP_F32_GT assembly
 │   ├── collatz.cvma            # Collatz 3n+1 stopping time assembly
 │   ├── binary_search.cvma      # Binary search algorithm assembly
-│   └── subroutines.cvma        # Recursive assembly subroutines
+│   ├── subroutines.cvma        # Recursive assembly subroutines
+│   ├── matrix_operations.cvma  # Subroutines, LEA, dot product & matrix trace
+│   ├── sorting_and_stats.cvma  # Conversions, float division & statistical mean
+│   └── pseudo_random_hash.cvma # PRNG LCG algorithm, bitwise hash & shifts
 ```
 
 ---

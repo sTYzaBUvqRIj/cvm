@@ -24,6 +24,9 @@ example2/
 ├── collatz.cvma           Collatz (3n+1) sequence stopping time algorithm
 ├── binary_search.cvma     Binary search over sorted array elements
 ├── subroutines.cvma        Recursive assembly subroutines (OP_CALL_BC / OP_RET)
+├── matrix_operations.cvma  Subroutines, LEA pointer arithmetic, dot product & matrix trace
+├── sorting_and_stats.cvma  Type conversions, double float division & statistical mean
+├── pseudo_random_hash.cvma PRNG LCG algorithm, bitwise hash pipeline & bit shifts
 ├── Makefile               Automates compilation, assembly, and execution
 └── README.md              This documentation file
 ```
@@ -47,7 +50,7 @@ This compiles `cvma2cvmb` and assembles every `.cvma` file into a corresponding 
 make run
 ```
 
-This assembles all 15 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
+This assembles all 18 `.cvma` files, compiles the `vm_run` CLI runner, and executes each generated `.cvmb` bytecode file in the VM.
 
 ### 3. Assemble a Single File Manually
 
