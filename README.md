@@ -54,32 +54,20 @@ not expressible in bytecode.
 
 ```
 cvm/
-├── vm.h              Public API — opcodes, types, VMContext, vm_execute()
-├── vm.c              VM implementation — dispatch loop
-├── vm_builder.h      Bytecode construction helpers (emit_* functions)
-├── vm_loader.h       .cvmb file format + standard native function library
-├── vm_assembler.h    Two-pass assembler (.cvma assembly text -> bytecode)
-├── vm_disassembler.h Bytecode disassembler (bytecode -> assembly text)
-├── DOCUMENTATION.md  Complete opcode reference
-├── README.md         This file
-├── LICENSE           GNU General Public License v3.0
-├── example/          C API Example Suite
-│   ├── Makefile          Build system for all examples
-│   ├── README.md         Example-specific documentation
-│   ├── vm_run.c          CLI runner source
-│   ├── basic.c           NOP, MOVE, CONST_*, RETURN
-│   ├── arithmetic.c      ADD/SUB/MUL/DIV/REM — i32 and i64
-│   ├── floating_point.c  ADD/SUB/MUL/DIV — f32 and f64, NaN/Inf
-│   ├── comparison.c      CMP_I32/I64/F32/F64
-│   ├── branching.c       IF_EQ/NE/LT/GE/GT/LE, IF_*Z, GOTO
-│   ├── bitwise.c         AND/OR/XOR/NOT — i32 and i64
-│   ├── shifts.c          SHL/SHR/USHR — i32 and i64
-│   ├── conversions.c     All 14 type conversion opcodes
-│   ├── memory.c          LOAD*/STORE* — all widths, signed/unsigned
-│   ├── pointers.c        LEA, LOAD_PTR, STORE_PTR, pointer chains
-│   ├── native_functions.c CALL, CALL_VOID, native registration
+├── vm.h                        # Public API — opcodes, types, VMContext, vm_execute()
+├── vm.c                        # VM implementation — dispatch loop
+├── vm_builder.h                # Bytecode construction helpers (emit_* functions)
+├── vm_loader.h                 # .cvmb file format + standard native function library
+├── vm_assembler.h              # Two-pass assembler (.cvma assembly text -> bytecode)
+├── vm_disassembler.h           # Bytecode disassembler (bytecode -> assembly text)
+├── DOCUMENTATION.md            # Complete opcode & API reference
+├── README.md                   # This file
+├── LICENSE                     # GNU General Public License v3.0
 ├── example/                    # C API test & example programs (25 standalone files)
-│   ├── vm_builder.h            # Dynamic bytecode emitter & test macro helpers
+│   ├── Makefile                # Build system for all C examples
+│   ├── README.md               # C example suite documentation
+│   ├── vm_run.c                # CLI runner source
+│   ├── vm_builder.h            # Emitter & test macro helpers
 │   ├── basic.c                 # Constants, register moves, NOP, return
 │   ├── arithmetic.c            # Integer arithmetic (i32/i64) & negation
 │   ├── floating_point.c        # Float arithmetic (f32/f64) & IEEE edge cases
@@ -106,6 +94,8 @@ cvm/
 │   ├── subroutines.c           # Subroutines, recursion, & call stack frames
 │   └── hash_algorithms.c       # DJB2, FNV-1a 32-bit & FNV-1a 64-bit hashing
 ├── example2/                   # Text Assembly (.cvma) test suite (19 files)
+│   ├── Makefile                # Automates compilation, assembly, and execution
+│   ├── README.md               # Assembly workflow documentation
 │   ├── cvma2cvmb.c             # Text assembly compiler tool (.cvma -> .cvmb)
 │   ├── basic.cvma              # Basic assembly instructions
 │   ├── arithmetic.cvma         # Assembly arithmetic ops
