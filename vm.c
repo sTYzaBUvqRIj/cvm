@@ -223,17 +223,17 @@ VMError vm_execute(
         return VM_OK;
     }
 
+    /* If resuming from PAUSED state and pc is 0, continue from ctx->pc; otherwise use pc */
+    if ((ctx->flags & VM_FLAG_PAUSED) && pc == 0) {
+        pc = ctx->pc;
+    } else {
+        ctx->pc = pc;
+    }
+
     const int single_step = (ctx->flags & VM_FLAG_SINGLE_STEP) != 0;
 
     ctx->flags |= VM_FLAG_RUNNING;
     ctx->flags &= ~(VM_FLAG_PAUSED | VM_FLAG_HALTED);
-
-    /* Sync starting program counter */
-    if (pc != 0 || ctx->pc == 0) {
-        ctx->pc = pc;
-    } else {
-        pc = ctx->pc;
-    }
 
     while (pc < bytecode_size) {
         ctx->pc = pc;
