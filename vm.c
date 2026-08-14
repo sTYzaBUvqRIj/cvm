@@ -305,9 +305,15 @@ VMError vm_execute(
     const uint8_t* bytecode,
     uint32_t       bytecode_size)
 {
-    /* If resuming from PAUSED state and pc is 0, continue from ctx->pc; otherwise use pc */
-    if ((ctx->flags & VM_FLAG_PAUSED) && pc == 0) {
+    /* Decide whether to resume from a previous pause or start fresh.
+     * VM_FLAG_RESUME is set automatically by the VM whenever execution is
+     * paused (breakpoint or single-step).  When set, ctx->pc takes priority
+     * over the caller-supplied pc argument, and the flag is consumed here.
+     * A caller that wants to restart from an arbitrary address while the VM
+     * is paused should clear VM_FLAG_RESUME before calling vm_execute(). */
+    if (ctx->flags & VM_FLAG_RESUME) {
         pc = ctx->pc;
+        ctx->flags &= ~VM_FLAG_RESUME;
     } else {
         ctx->pc = pc;
     }
@@ -363,7 +369,7 @@ VMError vm_execute(
             }
             ctx->pc = instr_pc;
             ctx->flags &= ~VM_FLAG_RUNNING;
-            ctx->flags |= VM_FLAG_PAUSED;
+            ctx->flags |= VM_FLAG_PAUSED | VM_FLAG_RESUME;
             if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
                 memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
             }
@@ -1208,7 +1214,7 @@ VMError vm_execute(
         ctx->pc = pc;
         if (single_step) {
             ctx->flags &= ~(VM_FLAG_RUNNING | VM_FLAG_SINGLE_STEP);
-            ctx->flags |= VM_FLAG_PAUSED;
+            ctx->flags |= VM_FLAG_PAUSED | VM_FLAG_RESUME;
             if (host_regs && reg_count > 0 && ctx->call_depth == 0) {
                 memcpy(host_regs, ctx->registers, reg_count * sizeof(VMRegister));
             }

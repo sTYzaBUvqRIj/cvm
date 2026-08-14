@@ -373,17 +373,14 @@ typedef VMError (*VMNativeFn)(
  * VM Context
  * ====================================================================== */
 
-/** Maximum number of native functions that can be registered. */
+/**
+ * Hard limit on the number of native functions that can be registered.
+ * IDs must satisfy: 0 <= id < VM_MAX_NATIVE_FUNCS.
+ */
 #define VM_MAX_NATIVE_FUNCS  256
 
 /** Maximum number of arguments per CALL / CALL_VOID instruction. */
 #define VM_MAX_CALL_ARGC      64
-
-/** Maximum call stack depth for bytecode subroutines (OP_CALL_BC). */
-#define VM_MAX_CALL_DEPTH    128
-
-/** Maximum registers saved per call frame. */
-#define VM_MAX_FRAME_REGS     64
 
 /* =========================================================================
  * Execution flags
@@ -391,8 +388,9 @@ typedef VMError (*VMNativeFn)(
 
 #define VM_FLAG_RUNNING      (1u << 0)  /* VM is actively executing           */
 #define VM_FLAG_PAUSED       (1u << 1)  /* execution is paused                */
-#define VM_FLAG_SINGLE_STEP  (1u << 2)  /* execute exactly one instruction   */
+#define VM_FLAG_SINGLE_STEP  (1u << 2)  /* execute exactly one instruction    */
 #define VM_FLAG_HALTED       (1u << 3)  /* execution has halted / finished    */
+#define VM_FLAG_RESUME       (1u << 4)  /* resume from ctx->pc on next call   */
 
 /* =========================================================================
  * Debugger & Profiler interface (enabled when compiled with -DVM_DEBUG)
@@ -473,8 +471,11 @@ void vm_init(VMContext* ctx);
 /*
  * vm_cleanup() / vm_destroy()
  *
- * Releases all dynamically allocated memory in ctx (registers, call stack frames,
- * native function registry).
+ * Releases all dynamically allocated memory in ctx (registers, call stack
+ * frames, native function registry) and zeroes the corresponding capacity /
+ * count fields.  Execution-state fields (pc, flags, result, user_data) are
+ * left intact so that a paused VM can inspect them after cleanup.  Call
+ * vm_init() before reusing a context for a completely fresh execution.
  */
 void vm_cleanup(VMContext* ctx);
 void vm_destroy(VMContext* ctx);

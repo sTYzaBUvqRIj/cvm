@@ -49,6 +49,7 @@
 #endif
 
 #include "vm.h"
+#include <assert.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -77,6 +78,8 @@ static void bc_init(Bytecode* bc)
 
 static void bc_u8(Bytecode* bc, uint8_t v)
 {
+    assert(bc->size < BC_MAX_SIZE &&
+           "Bytecode buffer overflow: increase BC_MAX_SIZE or split bytecode");
     bc->data[bc->size++] = v;
 }
 
@@ -464,7 +467,7 @@ static void emit_return(Bytecode* bc, uint8_t src) { bc_op(bc, OP_RETURN); bc_u8
 static VMError bc_run(VMContext* ctx, Bytecode* bc, uint32_t reg_count)
 {
     VMRegister regs[256];
-    if (reg_count == 0 || reg_count > 256) reg_count = 16;
+    if (reg_count == 0 || reg_count > 256) reg_count = 256;
     memset(regs, 0, sizeof(VMRegister) * reg_count);
     return vm_execute(ctx, regs, reg_count, 0, bc->data, bc->size);
 }
