@@ -324,6 +324,74 @@ static const char* vm_opname(uint16_t op)
     case OP_RETURN:       return "RETURN";
     case OP_CALL_BC:      return "CALL_BC";
     case OP_RET:          return "RET";
+    case OP_CMP_U32:      return "CMP_U32";
+    case OP_CMP_U64:      return "CMP_U64";
+    case OP_IF_ULT:       return "IF_ULT";
+    case OP_IF_UGE:       return "IF_UGE";
+    case OP_IF_UGT:       return "IF_UGT";
+    case OP_IF_ULE:       return "IF_ULE";
+    case OP_SELECT:       return "SELECT";
+    case OP_CLZ_I32:      return "CLZ_I32";
+    case OP_CLZ_I64:      return "CLZ_I64";
+    case OP_CTZ_I32:      return "CTZ_I32";
+    case OP_CTZ_I64:      return "CTZ_I64";
+    case OP_POPCNT_I32:   return "POPCNT_I32";
+    case OP_POPCNT_I64:   return "POPCNT_I64";
+    case OP_ROTL_I32:     return "ROTL_I32";
+    case OP_ROTR_I32:     return "ROTR_I32";
+    case OP_ROTL_I64:     return "ROTL_I64";
+    case OP_ROTR_I64:     return "ROTR_I64";
+    case OP_ABS_I32:      return "ABS_I32";
+    case OP_ABS_I64:      return "ABS_I64";
+    case OP_MIN_I32:      return "MIN_I32";
+    case OP_MAX_I32:      return "MAX_I32";
+    case OP_MIN_U32:      return "MIN_U32";
+    case OP_MAX_U32:      return "MAX_U32";
+    case OP_MIN_I64:      return "MIN_I64";
+    case OP_MAX_I64:      return "MAX_I64";
+    case OP_MIN_U64:      return "MIN_U64";
+    case OP_MAX_U64:      return "MAX_U64";
+    case OP_MULH_I32:     return "MULH_I32";
+    case OP_MULH_U32:     return "MULH_U32";
+    case OP_MULH_I64:     return "MULH_I64";
+    case OP_MULH_U64:     return "MULH_U64";
+    case OP_BOOL_I32:     return "BOOL_I32";
+    case OP_BOOL_I64:     return "BOOL_I64";
+    case OP_ABS_F32:      return "ABS_F32";
+    case OP_ABS_F64:      return "ABS_F64";
+    case OP_SQRT_F32:     return "SQRT_F32";
+    case OP_SQRT_F64:     return "SQRT_F64";
+    case OP_FLOOR_F32:    return "FLOOR_F32";
+    case OP_FLOOR_F64:    return "FLOOR_F64";
+    case OP_CEIL_F32:     return "CEIL_F32";
+    case OP_CEIL_F64:     return "CEIL_F64";
+    case OP_TRUNC_F32:    return "TRUNC_F32";
+    case OP_TRUNC_F64:    return "TRUNC_F64";
+    case OP_ROUND_F32:    return "ROUND_F32";
+    case OP_ROUND_F64:    return "ROUND_F64";
+    case OP_MIN_F32:      return "MIN_F32";
+    case OP_MAX_F32:      return "MAX_F32";
+    case OP_MIN_F64:      return "MIN_F64";
+    case OP_MAX_F64:      return "MAX_F64";
+    case OP_COPYSIGN_F32: return "COPYSIGN_F32";
+    case OP_COPYSIGN_F64: return "COPYSIGN_F64";
+    case OP_LOAD8_OFF:    return "LOAD8_OFF";
+    case OP_LOAD8S_OFF:   return "LOAD8S_OFF";
+    case OP_LOAD16_OFF:   return "LOAD16_OFF";
+    case OP_LOAD16S_OFF:  return "LOAD16S_OFF";
+    case OP_LOAD32_OFF:   return "LOAD32_OFF";
+    case OP_LOAD32S_OFF:  return "LOAD32S_OFF";
+    case OP_LOAD64_OFF:   return "LOAD64_OFF";
+    case OP_LOAD_PTR_OFF: return "LOAD_PTR_OFF";
+    case OP_STORE8_OFF:   return "STORE8_OFF";
+    case OP_STORE16_OFF:  return "STORE16_OFF";
+    case OP_STORE32_OFF:  return "STORE32_OFF";
+    case OP_STORE64_OFF:  return "STORE64_OFF";
+    case OP_STORE_PTR_OFF:return "STORE_PTR_OFF";
+    case OP_LEA_REG:      return "LEA_REG";
+    case OP_MEMCPY:       return "MEMCPY";
+    case OP_MEMSET:       return "MEMSET";
+    case OP_SWITCH:       return "SWITCH";
     default:              return "??";
     }
 }
@@ -1327,15 +1395,6 @@ VMError vm_execute(
 
             pc = frame->return_pc;
         } break;
-
-        /* ============================================================== */
-        /* Unknown opcode                                                  */
-        /* ============================================================== */
-
-        /* ============================================================== */
-        /* Unknown opcode                                                  */
-        /* ============================================================== */
-
         /* ============================================================== */
         /* CMP_U32 / CMP_U64  [dst:u8][lhs:u8][rhs:u8]                    */
         /* ============================================================== */
@@ -1405,12 +1464,12 @@ VMError vm_execute(
         /* Bit manipulation — unary  [dst:u8][src:u8]                     */
         /* ============================================================== */
 
-        case OP_CLZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CLZ32(regs[s].u32); } break;
-        case OP_CLZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CLZ64(regs[s].u64); } break;
-        case OP_CTZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CTZ32(regs[s].u32); } break;
-        case OP_CTZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CTZ64(regs[s].u64); } break;
-        case OP_POPCNT_I32: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_POPCNT32(regs[s].u32); } break;
-        case OP_POPCNT_I64: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_POPCNT64(regs[s].u64); } break;
+        case OP_CLZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_CLZ32(regs[s].u32); } break;
+        case OP_CLZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_CLZ64(regs[s].u64); } break;
+        case OP_CTZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_CTZ32(regs[s].u32); } break;
+        case OP_CTZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_CTZ64(regs[s].u64); } break;
+        case OP_POPCNT_I32: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_POPCNT32(regs[s].u32); } break;
+        case OP_POPCNT_I64: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u64 = (uint64_t)VM_POPCNT64(regs[s].u64); } break;
 
         /* ============================================================== */
         /* Rotations  [dst:u8][val:u8][amt:u8]                            */
@@ -1427,9 +1486,9 @@ VMError vm_execute(
             const uint32_t v = regs[val].u32;
             const uint32_t s = (uint32_t)regs[amt].i32 & 31u;
             if (op == OP_ROTL_I32)
-                regs[dst].u32 = s ? (v << s) | (v >> (32u - s)) : v;
+                regs[dst].u64 = (uint64_t)(s ? (v << s) | (v >> (32u - s)) : v);
             else
-                regs[dst].u32 = s ? (v >> s) | (v << (32u - s)) : v;
+                regs[dst].u64 = (uint64_t)(s ? (v >> s) | (v << (32u - s)) : v);
         } break;
 
         case OP_ROTL_I64:
@@ -1536,7 +1595,7 @@ VMError vm_execute(
             const uint8_t src = read8LE(bytecode + pc + 1);
             CHECK_REG(dst); CHECK_REG(src);
             pc += 2;
-            regs[dst].i32 = regs[src].i32 != 0 ? 1 : 0;
+            regs[dst].u64 = regs[src].i32 != 0 ? 1 : 0;
         } break;
 
         case OP_BOOL_I64: {
@@ -1545,7 +1604,7 @@ VMError vm_execute(
             const uint8_t src = read8LE(bytecode + pc + 1);
             CHECK_REG(dst); CHECK_REG(src);
             pc += 2;
-            regs[dst].i32 = regs[src].i64 != 0 ? 1 : 0;
+            regs[dst].u64 = regs[src].i64 != 0 ? 1 : 0;
         } break;
 
         /* ============================================================== */
@@ -1717,7 +1776,7 @@ VMError vm_execute(
             const uint8_t  reg     = read8LE  (bytecode + pc);
             const uint32_t count   = read32LE (bytecode + pc + 1);
             const int32_t  def_off = read32SLE(bytecode + pc + 5);
-            CHECK_BOUNDS(9u + count * 4u);
+            CHECK_BOUNDS(9u + (uint64_t)count * 4u);
             CHECK_REG(reg);
             pc += 9u;
             const int32_t idx = regs[reg].i32;

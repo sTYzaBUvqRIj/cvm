@@ -689,6 +689,182 @@ static void test_switch(void)
 }
 
 /* =========================================================================
+ * 15. Clean upper 32 bits on 32-bit bit-ops & bool
+ * ====================================================================== */
+
+static void test_dirty_high_bits(void)
+{
+    printf("\n--- Clean High 32 Bits in Bit-Ops & BOOL ---\n");
+    VMContext ctx; Bytecode bc;
+    vm_init(&ctx);
+    bc_init(&bc);
+
+    VMRegister regs[8];
+    memset(regs, 0, sizeof(regs));
+    /* Pre-fill destination registers with dirty high bits */
+    regs[0].u64 = 0xDEADBEEF00000000ULL;
+    regs[1].u64 = 0xCAFEBABE00000000ULL;
+    regs[2].u64 = 0x1122334400000000ULL;
+    regs[3].u64 = 0x5566778800000000ULL;
+    regs[4].u64 = 0x99AABBCC00000000ULL;
+    regs[5].u32 = 1;
+    regs[6].u32 = 4;
+
+    emit_clz_i32   (&bc, 0, 5);     /* r0 = clz(1) = 31 */
+    emit_ctz_i32   (&bc, 1, 6);     /* r1 = ctz(4) = 2  */
+    emit_popcnt_i32(&bc, 2, 5);     /* r2 = popcnt(1) = 1 */
+    emit_rotl_i32  (&bc, 3, 5, 5);  /* r3 = rotl(1,1) = 2 */
+    emit_bool_i32  (&bc, 4, 5);     /* r4 = bool(1) = 1 */
+    emit_return_void(&bc);
+
+    bc_run_regs(&ctx, &bc, regs, 8);
+
+    check_u64("CLZ_I32 clean high bits (u64=31)",    regs[0].u64, 31ULL);
+    check_u64("CTZ_I32 clean high bits (u64=2)",     regs[1].u64, 2ULL);
+    check_u64("POPCNT_I32 clean high bits (u64=1)",  regs[2].u64, 1ULL);
+    check_u64("ROTL_I32 clean high bits (u64=2)",    regs[3].u64, 2ULL);
+    check_u64("BOOL_I32 clean high bits (u64=1)",    regs[4].u64, 1ULL);
+
+    vm_destroy(&ctx);
+}
+
+/* =========================================================================
+ * 16. SWITCH Large Count Overflow Guard
+ * ====================================================================== */
+
+static void test_switch_large_count_oob(void)
+{
+    printf("\n--- SWITCH Large Count Overflow Guard ---\n");
+    VMContext ctx; Bytecode bc;
+    vm_init(&ctx);
+    bc_init(&bc);
+
+    /* Emit raw malformed SWITCH with count = 0xFFFFFFFF */
+    bc_op(&bc, OP_SWITCH);
+    bc_u8(&bc, 0);          /* reg = r0 */
+    bc_u32(&bc, 0xFFFFFFFFu);/* count = 2^32-1 (would overflow 32-bit bounds calc) */
+    bc_i32(&bc, 0);         /* default */
+
+    VMError err = bc_run(&ctx, &bc, 4);
+    check_err("SWITCH count=0xFFFFFFFF traps OOB", err, VM_ERR_OUT_OF_BOUNDS);
+
+    vm_destroy(&ctx);
+}
+
+/* =========================================================================
+ * 17. Load / Store with Offset for All Widths
+ * ====================================================================== */
+
+static void test_load_store_all_offset_variants(void)
+{
+    printf("\n--- Load / Store Offset All Widths ---\n");
+    VMContext ctx; Bytecode bc;
+    vm_init(&ctx);
+    bc_init(&bc);
+
+    typedef struct {
+        uint8_t   u8_val;
+        int8_t    i8_val;
+        uint16_t  u16_val;
+        int16_t   i16_val;
+        uint32_t  u32_val;
+        int32_t   i32_val;
+        uint64_t  u64_val;
+        void*     ptr_val;
+    } TestStruct;
+
+    TestStruct s;
+    memset(&s, 0, sizeof(s));
+    s.u8_val  = 0xFE;
+    s.i8_val  = -5;
+    s.u16_val = 0xCAFE;
+    s.i16_val = -1000;
+    s.u32_val = 0xDEADBEEF;
+    s.i32_val = -123456;
+    s.u64_val = 0x123456789ABCDEF0ULL;
+    s.ptr_val = &s;
+
+    VMRegister regs[16];
+    memset(regs, 0, sizeof(regs));
+    regs[0].ptr = &s;
+
+    /* Read all fields via offset */
+    emit_load8_off   (&bc, 1, 0, (int32_t)offsetof(TestStruct, u8_val));
+    emit_load8s_off  (&bc, 2, 0, (int32_t)offsetof(TestStruct, i8_val));
+    emit_load16_off  (&bc, 3, 0, (int32_t)offsetof(TestStruct, u16_val));
+    emit_load16s_off (&bc, 4, 0, (int32_t)offsetof(TestStruct, i16_val));
+    emit_load32_off  (&bc, 5, 0, (int32_t)offsetof(TestStruct, u32_val));
+    emit_load32s_off (&bc, 6, 0, (int32_t)offsetof(TestStruct, i32_val));
+    emit_load64_off  (&bc, 7, 0, (int32_t)offsetof(TestStruct, u64_val));
+    emit_load_ptr_off(&bc, 8, 0, (int32_t)offsetof(TestStruct, ptr_val));
+
+    /* Store new values via offset */
+    regs[9].u8  = 0x42;
+    regs[10].u16 = 0x5678;
+    regs[11].u64 = 0xFEDCBA9876543210ULL;
+    regs[12].ptr = (void*)0x1234;
+
+    emit_store8_off   (&bc, 0, 9,  (int32_t)offsetof(TestStruct, u8_val));
+    emit_store16_off  (&bc, 0, 10, (int32_t)offsetof(TestStruct, u16_val));
+    emit_store64_off  (&bc, 0, 11, (int32_t)offsetof(TestStruct, u64_val));
+    emit_store_ptr_off(&bc, 0, 12, (int32_t)offsetof(TestStruct, ptr_val));
+
+    emit_return_void(&bc);
+
+    bc_run_regs(&ctx, &bc, regs, 16);
+
+    check_u64("LOAD8_OFF zero-extended",   regs[1].u64, 0xFEULL);
+    check_i64("LOAD8S_OFF sign-extended",  regs[2].i64, -5LL);
+    check_u64("LOAD16_OFF zero-extended",  regs[3].u64, 0xCAFEULL);
+    check_i64("LOAD16S_OFF sign-extended", regs[4].i64, -1000LL);
+    check_u64("LOAD32_OFF zero-extended",  regs[5].u64, 0xDEADBEEFULL);
+    check_i64("LOAD32S_OFF sign-extended", regs[6].i64, -123456LL);
+    check_u64("LOAD64_OFF exact",          regs[7].u64, 0x123456789ABCDEF0ULL);
+    check_bool("LOAD_PTR_OFF exact",       regs[8].ptr == &s);
+
+    check_i32("STORE8_OFF updated host",   (int32_t)s.u8_val,  0x42);
+    check_i32("STORE16_OFF updated host",  (int32_t)s.u16_val, 0x5678);
+    check_u64("STORE64_OFF updated host",  s.u64_val, 0xFEDCBA9876543210ULL);
+    check_bool("STORE_PTR_OFF updated host", s.ptr_val == (void*)0x1234);
+
+    vm_destroy(&ctx);
+}
+
+/* =========================================================================
+ * 18. Debug Opcode Names and Profiler
+ * ====================================================================== */
+
+static void test_debug_opnames(void)
+{
+    printf("\n--- Debug Opcode Names & Profiler ---\n");
+    VMContext ctx; Bytecode bc;
+    vm_init(&ctx);
+    bc_init(&bc);
+
+#if defined(VM_DEBUG)
+    ctx.profiler_enabled = 1;
+#endif
+
+    emit_const_i32(&bc, 0, 5);
+    emit_clz_i32  (&bc, 1, 0);
+    emit_popcnt_i32(&bc, 2, 0);
+    emit_abs_i32  (&bc, 3, 0);
+    emit_return   (&bc, 3);
+
+    VMError err = bc_run(&ctx, &bc, 4);
+    check_err("Execution with profiler enabled", err, VM_OK);
+
+#if defined(VM_DEBUG)
+    check_bool("Profiler total instructions > 0", ctx.total_instructions > 0);
+    check_bool("CLZ_I32 counted", ctx.opcode_counts[OP_CLZ_I32] == 1);
+    check_bool("POPCNT_I32 counted", ctx.opcode_counts[OP_POPCNT_I32] == 1);
+    check_bool("ABS_I32 counted", ctx.opcode_counts[OP_ABS_I32] == 1);
+#endif
+
+    vm_destroy(&ctx);
+}
+
+/* =========================================================================
  * main
  * ====================================================================== */
 
@@ -710,7 +886,12 @@ int main(void)
     test_lea_reg();
     test_memcpy_memset();
     test_switch();
+    test_dirty_high_bits();
+    test_switch_large_count_oob();
+    test_load_store_all_offset_variants();
+    test_debug_opnames();
 
     print_summary();
     return g_fail > 0 ? 1 : 0;
 }
+
