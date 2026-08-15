@@ -457,6 +457,165 @@ static void emit_return_void(Bytecode* bc) { bc_op(bc, OP_RETURN_VOID); }
 static void emit_return(Bytecode* bc, uint8_t src) { bc_op(bc, OP_RETURN); bc_u8(bc, src); }
 
 /* =========================================================================
+ * Extended opcode emitters
+ * ====================================================================== */
+
+/* --- Unsigned comparisons: dst.i32 = -1 | 0 | +1 ------------------------ */
+static void emit_cmp_u32(Bytecode* bc, uint8_t d, uint8_t l, uint8_t r) { bc_op(bc,OP_CMP_U32); bc_u8(bc,d); bc_u8(bc,l); bc_u8(bc,r); }
+static void emit_cmp_u64(Bytecode* bc, uint8_t d, uint8_t l, uint8_t r) { bc_op(bc,OP_CMP_U64); bc_u8(bc,d); bc_u8(bc,l); bc_u8(bc,r); }
+
+/* --- Unsigned conditional branches (returns patch pos like emit_if_eq) --- */
+static uint32_t emit_if_ult(Bytecode* bc, uint8_t a, uint8_t b) { bc_op(bc,OP_IF_ULT); bc_u8(bc,a); bc_u8(bc,b); uint32_t p=bc->size; bc_i16(bc,0); return p; }
+static uint32_t emit_if_uge(Bytecode* bc, uint8_t a, uint8_t b) { bc_op(bc,OP_IF_UGE); bc_u8(bc,a); bc_u8(bc,b); uint32_t p=bc->size; bc_i16(bc,0); return p; }
+static uint32_t emit_if_ugt(Bytecode* bc, uint8_t a, uint8_t b) { bc_op(bc,OP_IF_UGT); bc_u8(bc,a); bc_u8(bc,b); uint32_t p=bc->size; bc_i16(bc,0); return p; }
+static uint32_t emit_if_ule(Bytecode* bc, uint8_t a, uint8_t b) { bc_op(bc,OP_IF_ULE); bc_u8(bc,a); bc_u8(bc,b); uint32_t p=bc->size; bc_i16(bc,0); return p; }
+
+/* --- SELECT  [dst:u8][a:u8][b:u8][cond:u8] ------------------------------- */
+static void emit_select(Bytecode* bc, uint8_t dst, uint8_t a, uint8_t b, uint8_t cond)
+{ bc_op(bc,OP_SELECT); bc_u8(bc,dst); bc_u8(bc,a); bc_u8(bc,b); bc_u8(bc,cond); }
+
+/* --- Bit manipulation ---------------------------------------------------- */
+static void emit_clz_i32   (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CLZ_I32);    bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_clz_i64   (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CLZ_I64);    bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_ctz_i32   (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CTZ_I32);    bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_ctz_i64   (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CTZ_I64);    bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_popcnt_i32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_POPCNT_I32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_popcnt_i64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_POPCNT_I64); bc_u8(bc,d); bc_u8(bc,s); }
+
+static void emit_rotl_i32(Bytecode* bc, uint8_t d, uint8_t v, uint8_t a) { bc_op(bc,OP_ROTL_I32); bc_u8(bc,d); bc_u8(bc,v); bc_u8(bc,a); }
+static void emit_rotr_i32(Bytecode* bc, uint8_t d, uint8_t v, uint8_t a) { bc_op(bc,OP_ROTR_I32); bc_u8(bc,d); bc_u8(bc,v); bc_u8(bc,a); }
+static void emit_rotl_i64(Bytecode* bc, uint8_t d, uint8_t v, uint8_t a) { bc_op(bc,OP_ROTL_I64); bc_u8(bc,d); bc_u8(bc,v); bc_u8(bc,a); }
+static void emit_rotr_i64(Bytecode* bc, uint8_t d, uint8_t v, uint8_t a) { bc_op(bc,OP_ROTR_I64); bc_u8(bc,d); bc_u8(bc,v); bc_u8(bc,a); }
+
+/* --- Integer ABS --------------------------------------------------------- */
+static void emit_abs_i32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ABS_I32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_abs_i64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ABS_I64); bc_u8(bc,d); bc_u8(bc,s); }
+
+/* --- Integer MIN / MAX --------------------------------------------------- */
+static void emit_min_i32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_I32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_i32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_I32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_min_u32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_U32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_u32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_U32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_min_i64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_I64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_i64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_I64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_min_u64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_U64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_u64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_U64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+
+/* --- MULH ---------------------------------------------------------------- */
+static void emit_mulh_i32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MULH_I32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_mulh_u32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MULH_U32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_mulh_i64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MULH_I64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_mulh_u64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MULH_U64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+
+/* --- BOOL ---------------------------------------------------------------- */
+static void emit_bool_i32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_BOOL_I32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_bool_i64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_BOOL_I64); bc_u8(bc,d); bc_u8(bc,s); }
+
+/* --- Float intrinsics — unary -------------------------------------------- */
+static void emit_abs_f32  (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ABS_F32);   bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_abs_f64  (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ABS_F64);   bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_sqrt_f32 (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_SQRT_F32);  bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_sqrt_f64 (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_SQRT_F64);  bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_floor_f32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_FLOOR_F32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_floor_f64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_FLOOR_F64); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_ceil_f32 (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CEIL_F32);  bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_ceil_f64 (Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_CEIL_F64);  bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_trunc_f32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_TRUNC_F32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_trunc_f64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_TRUNC_F64); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_round_f32(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ROUND_F32); bc_u8(bc,d); bc_u8(bc,s); }
+static void emit_round_f64(Bytecode* bc, uint8_t d, uint8_t s) { bc_op(bc,OP_ROUND_F64); bc_u8(bc,d); bc_u8(bc,s); }
+
+/* --- Float intrinsics — binary ------------------------------------------- */
+static void emit_min_f32     (Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_F32);      bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_f32     (Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_F32);      bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_min_f64     (Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MIN_F64);      bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_max_f64     (Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_MAX_F64);      bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_copysign_f32(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_COPYSIGN_F32); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+static void emit_copysign_f64(Bytecode* bc, uint8_t d, uint8_t a, uint8_t b) { bc_op(bc,OP_COPYSIGN_F64); bc_u8(bc,d); bc_u8(bc,a); bc_u8(bc,b); }
+
+/* --- Load with immediate offset  [dst:u8][base:u8][offset:i32] ----------- */
+static void emit_load8_off    (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD8_OFF);     bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load8s_off   (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD8S_OFF);    bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load16_off   (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD16_OFF);    bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load16s_off  (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD16S_OFF);   bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load32_off   (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD32_OFF);    bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load32s_off  (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD32S_OFF);   bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load64_off   (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD64_OFF);    bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+static void emit_load_ptr_off (Bytecode* bc, uint8_t d, uint8_t b, int32_t o) { bc_op(bc,OP_LOAD_PTR_OFF);  bc_u8(bc,d); bc_u8(bc,b); bc_i32(bc,o); }
+
+/* --- Store with immediate offset  [addr:u8][src:u8][offset:i32] ---------- */
+static void emit_store8_off   (Bytecode* bc, uint8_t a, uint8_t s, int32_t o) { bc_op(bc,OP_STORE8_OFF);    bc_u8(bc,a); bc_u8(bc,s); bc_i32(bc,o); }
+static void emit_store16_off  (Bytecode* bc, uint8_t a, uint8_t s, int32_t o) { bc_op(bc,OP_STORE16_OFF);   bc_u8(bc,a); bc_u8(bc,s); bc_i32(bc,o); }
+static void emit_store32_off  (Bytecode* bc, uint8_t a, uint8_t s, int32_t o) { bc_op(bc,OP_STORE32_OFF);   bc_u8(bc,a); bc_u8(bc,s); bc_i32(bc,o); }
+static void emit_store64_off  (Bytecode* bc, uint8_t a, uint8_t s, int32_t o) { bc_op(bc,OP_STORE64_OFF);   bc_u8(bc,a); bc_u8(bc,s); bc_i32(bc,o); }
+static void emit_store_ptr_off(Bytecode* bc, uint8_t a, uint8_t s, int32_t o) { bc_op(bc,OP_STORE_PTR_OFF); bc_u8(bc,a); bc_u8(bc,s); bc_i32(bc,o); }
+
+/* --- LEA_REG  [dst:u8][base:u8][idx:u8] ---------------------------------- */
+static void emit_lea_reg(Bytecode* bc, uint8_t dst, uint8_t base, uint8_t idx)
+{ bc_op(bc,OP_LEA_REG); bc_u8(bc,dst); bc_u8(bc,base); bc_u8(bc,idx); }
+
+/* --- MEMCPY / MEMSET  [dst:u8][src_or_val:u8][len:u8] -------------------- */
+static void emit_memcpy(Bytecode* bc, uint8_t dst, uint8_t src, uint8_t len)
+{ bc_op(bc,OP_MEMCPY); bc_u8(bc,dst); bc_u8(bc,src); bc_u8(bc,len); }
+static void emit_memset(Bytecode* bc, uint8_t dst, uint8_t val, uint8_t len)
+{ bc_op(bc,OP_MEMSET); bc_u8(bc,dst); bc_u8(bc,val); bc_u8(bc,len); }
+
+/* --- SWITCH --------------------------------------------------------------- */
+/*
+ * emit_switch_header — emit the SWITCH opcode header and reserve N+1
+ * placeholder i32 slots (slot 0 = default, slots 1..N = case 0..N-1).
+ * Returns the bytecode offset of slot 0 for use with bc_patch_switch().
+ *
+ * After emitting the header, emit the case bodies, then call
+ * bc_patch_switch() for each slot (including the default).
+ * switch_end_pc = bc->size after all case bodies AND after the switch block.
+ *
+ * Typical usage:
+ *   uint32_t sw_slots = emit_switch_header(&bc, reg, n_cases);
+ *   uint32_t case0_pc = bc->size; // <- emit case 0 body here
+ *   emit_goto_16_fwd / ... (to skip to after all cases)
+ *   uint32_t case1_pc = bc->size; // <- emit case 1 body
+ *   ...
+ *   uint32_t after_switch = bc->size;
+ *   bc_patch_switch(&bc, sw_slots, 0, default_pc, after_switch);
+ *   bc_patch_switch(&bc, sw_slots, 1, case0_pc,   after_switch);
+ *   bc_patch_switch(&bc, sw_slots, 2, case1_pc,   after_switch);
+ */
+static uint32_t emit_switch_header(Bytecode* bc, uint8_t reg, uint32_t n_cases)
+{
+    uint32_t i;
+    bc_op(bc, OP_SWITCH);
+    bc_u8(bc, reg);
+    bc_u32(bc, n_cases);
+    uint32_t slot_base = bc->size; /* points to slot 0 (default) */
+    for (i = 0; i < n_cases + 1; i++) bc_i32(bc, 0); /* reserve slots */
+    return slot_base;
+}
+
+/*
+ * bc_patch_switch — patch one slot in a SWITCH table.
+ * slot_base    : returned by emit_switch_header().
+ * slot_index   : 0 = default, 1 = case 0, 2 = case 1, ...
+ * target_pc    : absolute bc offset of the target label.
+ * switch_end_pc: bc->size after the SWITCH instruction's last byte
+ *                (= slot_base + (n_cases+1)*4).
+ *
+ * Offset semantics: relative to switch_end_pc (= pc after entire SWITCH).
+ */
+static void bc_patch_switch(Bytecode* bc, uint32_t slot_base,
+                            uint32_t slot_index, uint32_t target_pc,
+                            uint32_t switch_end_pc)
+{
+    int32_t off = (int32_t)target_pc - (int32_t)switch_end_pc;
+    uint32_t pos = slot_base + slot_index * 4u;
+    bc->data[pos]     = (uint8_t)(off);
+    bc->data[pos + 1] = (uint8_t)((uint32_t)off >>  8);
+    bc->data[pos + 2] = (uint8_t)((uint32_t)off >> 16);
+    bc->data[pos + 3] = (uint8_t)((uint32_t)off >> 24);
+}
+
+
+/* =========================================================================
  * Execution helpers
  * ====================================================================== */
 

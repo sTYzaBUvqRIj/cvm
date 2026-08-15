@@ -58,7 +58,8 @@ EXAMPLES = \
     benchmark      \
     debugger_profiler \
     subroutines    \
-    hash_algorithms
+    hash_algorithms \
+    extended_ops
 
 # Tools (separate from examples — vm_run is the standalone bytecode runner)
 TOOLS = vm_run

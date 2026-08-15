@@ -6,10 +6,136 @@
 
 #include "vm.h"
 
-#include <math.h>       /* isnan()                          */
+#include <math.h>       /* isnan(), fabsf(), sqrtf(), etc.  */
 #include <stdio.h>      /* fprintf(), stderr  (VM_DEBUG)    */
 #include <stdlib.h>     /* qsort()                          */
-#include <string.h>     /* memset(), memcpy()               */
+#include <string.h>     /* memset(), memcpy(), memmove()    */
+
+/* =========================================================================
+ * Portability helpers — bit manipulation and wide multiplication
+ *
+ * CLZ/CTZ/POPCNT use compiler intrinsics where available, with pure-C
+ * fallbacks.  MULH_I64/U64 use __int128 on GCC/Clang and the MSVC
+ * intrinsics __mulh/__umulh on MSVC x64.
+ * ====================================================================== */
+
+/* --- CLZ (count leading zeros) ------------------------------------------ */
+#if defined(__GNUC__) || defined(__clang__)
+#  define VM_CLZ32(x)    ((uint32_t)((x) ? __builtin_clz(x)   : 32))
+#  define VM_CLZ64(x)    ((uint32_t)((x) ? __builtin_clzll(x) : 64))
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#  include <intrin.h>
+static uint32_t vm_clz32_msvc(uint32_t x) {
+    if (!x) return 32;
+    unsigned long idx; _BitScanReverse(&idx, x); return 31u - (uint32_t)idx;
+}
+static uint32_t vm_clz64_msvc(uint64_t x) {
+    if (!x) return 64;
+    unsigned long idx; _BitScanReverse64(&idx, x); return 63u - (uint32_t)idx;
+}
+#  define VM_CLZ32(x)  vm_clz32_msvc(x)
+#  define VM_CLZ64(x)  vm_clz64_msvc(x)
+#else
+static uint32_t vm_clz32_fallback(uint32_t x) {
+    if (!x) return 32;
+    uint32_t n = 0;
+    if (!(x & 0xFFFF0000u)) { n += 16; x <<= 16; }
+    if (!(x & 0xFF000000u)) { n += 8;  x <<= 8;  }
+    if (!(x & 0xF0000000u)) { n += 4;  x <<= 4;  }
+    if (!(x & 0xC0000000u)) { n += 2;  x <<= 2;  }
+    if (!(x & 0x80000000u)) { n += 1; }
+    return n;
+}
+static uint32_t vm_clz64_fallback(uint64_t x) {
+    if (!x) return 64;
+    uint32_t hi = (uint32_t)(x >> 32);
+    return hi ? vm_clz32_fallback(hi) : 32 + vm_clz32_fallback((uint32_t)x);
+}
+#  define VM_CLZ32(x)  vm_clz32_fallback((uint32_t)(x))
+#  define VM_CLZ64(x)  vm_clz64_fallback((uint64_t)(x))
+#endif
+
+/* --- CTZ (count trailing zeros) ----------------------------------------- */
+#if defined(__GNUC__) || defined(__clang__)
+#  define VM_CTZ32(x)    ((uint32_t)((x) ? __builtin_ctz(x)   : 32))
+#  define VM_CTZ64(x)    ((uint32_t)((x) ? __builtin_ctzll(x) : 64))
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+static uint32_t vm_ctz32_msvc(uint32_t x) {
+    if (!x) return 32;
+    unsigned long idx; _BitScanForward(&idx, x); return (uint32_t)idx;
+}
+static uint32_t vm_ctz64_msvc(uint64_t x) {
+    if (!x) return 64;
+    unsigned long idx; _BitScanForward64(&idx, x); return (uint32_t)idx;
+}
+#  define VM_CTZ32(x)  vm_ctz32_msvc(x)
+#  define VM_CTZ64(x)  vm_ctz64_msvc(x)
+#else
+static uint32_t vm_ctz32_fallback(uint32_t x) {
+    if (!x) return 32;
+    uint32_t n = 0;
+    if (!(x & 0xFFFFu))  { n += 16; x >>= 16; }
+    if (!(x & 0xFFu))    { n += 8;  x >>= 8;  }
+    if (!(x & 0xFu))     { n += 4;  x >>= 4;  }
+    if (!(x & 0x3u))     { n += 2;  x >>= 2;  }
+    if (!(x & 0x1u))     { n += 1; }
+    return n;
+}
+static uint32_t vm_ctz64_fallback(uint64_t x) {
+    if (!x) return 64;
+    uint32_t lo = (uint32_t)x;
+    return lo ? vm_ctz32_fallback(lo) : 32 + vm_ctz32_fallback((uint32_t)(x >> 32));
+}
+#  define VM_CTZ32(x)  vm_ctz32_fallback((uint32_t)(x))
+#  define VM_CTZ64(x)  vm_ctz64_fallback((uint64_t)(x))
+#endif
+
+/* --- POPCNT (population count) ------------------------------------------ */
+#if defined(__GNUC__) || defined(__clang__)
+#  define VM_POPCNT32(x) ((uint32_t)__builtin_popcount((uint32_t)(x)))
+#  define VM_POPCNT64(x) ((uint32_t)__builtin_popcountll((uint64_t)(x)))
+#elif defined(_MSC_VER)
+#  include <intrin.h>
+#  define VM_POPCNT32(x) ((uint32_t)__popcnt((unsigned int)(x)))
+#  define VM_POPCNT64(x) ((uint32_t)__popcnt64((unsigned __int64)(x)))
+#else
+static uint32_t vm_popcnt32_fallback(uint32_t x) {
+    x -= (x >> 1) & 0x55555555u;
+    x  = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
+    return (uint32_t)(((x + (x >> 4)) & 0x0F0F0F0Fu) * 0x01010101u) >> 24;
+}
+#  define VM_POPCNT32(x) vm_popcnt32_fallback((uint32_t)(x))
+#  define VM_POPCNT64(x) (VM_POPCNT32((uint32_t)(x)) + VM_POPCNT32((uint32_t)((uint64_t)(x) >> 32)))
+#endif
+
+/* --- MULH_I64 / MULH_U64 (128-bit multiply, high half) ------------------- */
+#if defined(__GNUC__) || defined(__clang__)
+static int64_t  vm_mulh_i64(int64_t  a, int64_t  b) { return (int64_t) ((__int128) a * (__int128) b >> 64); }
+static uint64_t vm_mulh_u64(uint64_t a, uint64_t b) { return (uint64_t)((unsigned __int128)a * (unsigned __int128)b >> 64); }
+#elif defined(_MSC_VER) && defined(_M_X64)
+#  include <intrin.h>
+static int64_t  vm_mulh_i64(int64_t  a, int64_t  b) { return __mulh(a, b); }
+static uint64_t vm_mulh_u64(uint64_t a, uint64_t b) { return __umulh(a, b); }
+#else
+/* Portable fallback using 32-bit halves */
+static uint64_t vm_mulh_u64(uint64_t a, uint64_t b) {
+    uint32_t ah = (uint32_t)(a >> 32), al = (uint32_t)a;
+    uint32_t bh = (uint32_t)(b >> 32), bl = (uint32_t)b;
+    uint64_t hi = (uint64_t)ah * bh;
+    uint64_t m0 = (uint64_t)al * bh;
+    uint64_t m1 = (uint64_t)ah * bl;
+    uint64_t lo = (uint64_t)al * bl;
+    uint64_t carry = ((lo >> 32) + (uint32_t)m0 + (uint32_t)m1) >> 32;
+    return hi + (m0 >> 32) + (m1 >> 32) + carry;
+}
+static int64_t vm_mulh_i64(int64_t a, int64_t b) {
+    uint64_t ua = (uint64_t)a, ub = (uint64_t)b;
+    uint64_t r = vm_mulh_u64(ua, ub);
+    if (a < 0) r -= (uint64_t)b;
+    if (b < 0) r -= (uint64_t)a;
+    return (int64_t)r;
+}
+#endif
 
 /* =========================================================================
  * Little-endian bytecode readers
@@ -1205,6 +1331,405 @@ VMError vm_execute(
         /* ============================================================== */
         /* Unknown opcode                                                  */
         /* ============================================================== */
+
+        /* ============================================================== */
+        /* Unknown opcode                                                  */
+        /* ============================================================== */
+
+        /* ============================================================== */
+        /* CMP_U32 / CMP_U64  [dst:u8][lhs:u8][rhs:u8]                    */
+        /* ============================================================== */
+
+        case OP_CMP_U32:
+        case OP_CMP_U64: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t lhs = read8LE(bytecode + pc + 1);
+            const uint8_t rhs = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(lhs); CHECK_REG(rhs);
+            pc += 3;
+            if (op == OP_CMP_U32) {
+                const uint32_t a = regs[lhs].u32, b = regs[rhs].u32;
+                regs[dst].i32 = (a < b) ? -1 : (a > b) ? 1 : 0;
+            } else {
+                const uint64_t a = regs[lhs].u64, b = regs[rhs].u64;
+                regs[dst].i32 = (a < b) ? -1 : (a > b) ? 1 : 0;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* Unsigned conditional branches  [A:u8][B:u8][offset:i16]        */
+        /* ============================================================== */
+
+        case OP_IF_ULT:
+        case OP_IF_UGE:
+        case OP_IF_UGT:
+        case OP_IF_ULE: {
+            CHECK_BOUNDS(4);
+            const uint8_t A      = read8LE  (bytecode + pc);
+            const uint8_t B      = read8LE  (bytecode + pc + 1);
+            const int16_t offset = read16SLE(bytecode + pc + 2);
+            CHECK_REG(A); CHECK_REG(B);
+            pc += 4;
+            const uint32_t lhs = regs[A].u32;
+            const uint32_t rhs = regs[B].u32;
+            int taken;
+            switch (op) {
+            case OP_IF_ULT: taken = (lhs <  rhs); break;
+            case OP_IF_UGE: taken = (lhs >= rhs); break;
+            case OP_IF_UGT: taken = (lhs >  rhs); break;
+            case OP_IF_ULE: taken = (lhs <= rhs); break;
+            default: taken = 0; break;
+            }
+            if (taken)
+                BRANCH_TARGET(pc, offset, pc);
+        } break;
+
+        /* ============================================================== */
+        /* SELECT  [dst:u8][a:u8][b:u8][cond:u8]                          */
+        /* dst = (cond.i32 != 0) ? a : b                                  */
+        /* ============================================================== */
+
+        case OP_SELECT: {
+            CHECK_BOUNDS(4);
+            const uint8_t dst  = read8LE(bytecode + pc);
+            const uint8_t a    = read8LE(bytecode + pc + 1);
+            const uint8_t b    = read8LE(bytecode + pc + 2);
+            const uint8_t cond = read8LE(bytecode + pc + 3);
+            CHECK_REG(dst); CHECK_REG(a); CHECK_REG(b); CHECK_REG(cond);
+            pc += 4;
+            regs[dst] = regs[cond].i32 ? regs[a] : regs[b];
+        } break;
+
+        /* ============================================================== */
+        /* Bit manipulation — unary  [dst:u8][src:u8]                     */
+        /* ============================================================== */
+
+        case OP_CLZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CLZ32(regs[s].u32); } break;
+        case OP_CLZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CLZ64(regs[s].u64); } break;
+        case OP_CTZ_I32:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CTZ32(regs[s].u32); } break;
+        case OP_CTZ_I64:    { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_CTZ64(regs[s].u64); } break;
+        case OP_POPCNT_I32: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_POPCNT32(regs[s].u32); } break;
+        case OP_POPCNT_I64: { CHECK_BOUNDS(2); uint8_t d=read8LE(bytecode+pc), s=read8LE(bytecode+pc+1); CHECK_REG(d); CHECK_REG(s); pc+=2; regs[d].u32 = VM_POPCNT64(regs[s].u64); } break;
+
+        /* ============================================================== */
+        /* Rotations  [dst:u8][val:u8][amt:u8]                            */
+        /* ============================================================== */
+
+        case OP_ROTL_I32:
+        case OP_ROTR_I32: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t val = read8LE(bytecode + pc + 1);
+            const uint8_t amt = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(val); CHECK_REG(amt);
+            pc += 3;
+            const uint32_t v = regs[val].u32;
+            const uint32_t s = (uint32_t)regs[amt].i32 & 31u;
+            if (op == OP_ROTL_I32)
+                regs[dst].u32 = s ? (v << s) | (v >> (32u - s)) : v;
+            else
+                regs[dst].u32 = s ? (v >> s) | (v << (32u - s)) : v;
+        } break;
+
+        case OP_ROTL_I64:
+        case OP_ROTR_I64: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t val = read8LE(bytecode + pc + 1);
+            const uint8_t amt = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(val); CHECK_REG(amt);
+            pc += 3;
+            const uint64_t v = regs[val].u64;
+            const uint64_t s = (uint64_t)regs[amt].i64 & 63u;
+            if (op == OP_ROTL_I64)
+                regs[dst].u64 = s ? (v << s) | (v >> (64u - s)) : v;
+            else
+                regs[dst].u64 = s ? (v >> s) | (v << (64u - s)) : v;
+        } break;
+
+        /* ============================================================== */
+        /* Integer ABS  [dst:u8][src:u8]                                  */
+        /* ============================================================== */
+
+        case OP_ABS_I32: {
+            CHECK_BOUNDS(2);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            CHECK_REG(dst); CHECK_REG(src);
+            pc += 2;
+            const int32_t v = regs[src].i32;
+            regs[dst].i32 = (v < 0) ? -v : v;
+        } break;
+
+        case OP_ABS_I64: {
+            CHECK_BOUNDS(2);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            CHECK_REG(dst); CHECK_REG(src);
+            pc += 2;
+            const int64_t v = regs[src].i64;
+            regs[dst].i64 = (v < 0) ? -v : v;
+        } break;
+
+        /* ============================================================== */
+        /* Integer MIN / MAX  [dst:u8][a:u8][b:u8]                        */
+        /* ============================================================== */
+
+        case OP_MIN_I32:
+        case OP_MAX_I32:
+        case OP_MIN_U32:
+        case OP_MAX_U32:
+        case OP_MIN_I64:
+        case OP_MAX_I64:
+        case OP_MIN_U64:
+        case OP_MAX_U64: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t a   = read8LE(bytecode + pc + 1);
+            const uint8_t b   = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(a); CHECK_REG(b);
+            pc += 3;
+            switch (op) {
+            case OP_MIN_I32: regs[dst].i32 = regs[a].i32 < regs[b].i32 ? regs[a].i32 : regs[b].i32; break;
+            case OP_MAX_I32: regs[dst].i32 = regs[a].i32 > regs[b].i32 ? regs[a].i32 : regs[b].i32; break;
+            case OP_MIN_U32: regs[dst].u32 = regs[a].u32 < regs[b].u32 ? regs[a].u32 : regs[b].u32; break;
+            case OP_MAX_U32: regs[dst].u32 = regs[a].u32 > regs[b].u32 ? regs[a].u32 : regs[b].u32; break;
+            case OP_MIN_I64: regs[dst].i64 = regs[a].i64 < regs[b].i64 ? regs[a].i64 : regs[b].i64; break;
+            case OP_MAX_I64: regs[dst].i64 = regs[a].i64 > regs[b].i64 ? regs[a].i64 : regs[b].i64; break;
+            case OP_MIN_U64: regs[dst].u64 = regs[a].u64 < regs[b].u64 ? regs[a].u64 : regs[b].u64; break;
+            case OP_MAX_U64: regs[dst].u64 = regs[a].u64 > regs[b].u64 ? regs[a].u64 : regs[b].u64; break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* MULH  [dst:u8][a:u8][b:u8]                                     */
+        /* ============================================================== */
+
+        case OP_MULH_I32:
+        case OP_MULH_U32:
+        case OP_MULH_I64:
+        case OP_MULH_U64: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t a   = read8LE(bytecode + pc + 1);
+            const uint8_t b   = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(a); CHECK_REG(b);
+            pc += 3;
+            switch (op) {
+            case OP_MULH_I32: regs[dst].i32 = (int32_t)(((int64_t) regs[a].i32 * (int64_t) regs[b].i32) >> 32); break;
+            case OP_MULH_U32: regs[dst].u32 = (uint32_t)(((uint64_t)regs[a].u32 * (uint64_t)regs[b].u32) >> 32); break;
+            case OP_MULH_I64: regs[dst].i64 = vm_mulh_i64(regs[a].i64, regs[b].i64); break;
+            case OP_MULH_U64: regs[dst].u64 = vm_mulh_u64(regs[a].u64, regs[b].u64); break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* BOOL  [dst:u8][src:u8]                                         */
+        /* ============================================================== */
+
+        case OP_BOOL_I32: {
+            CHECK_BOUNDS(2);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            CHECK_REG(dst); CHECK_REG(src);
+            pc += 2;
+            regs[dst].i32 = regs[src].i32 != 0 ? 1 : 0;
+        } break;
+
+        case OP_BOOL_I64: {
+            CHECK_BOUNDS(2);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            CHECK_REG(dst); CHECK_REG(src);
+            pc += 2;
+            regs[dst].i32 = regs[src].i64 != 0 ? 1 : 0;
+        } break;
+
+        /* ============================================================== */
+        /* Float intrinsics — unary  [dst:u8][src:u8]                     */
+        /* ============================================================== */
+
+        case OP_ABS_F32:   case OP_ABS_F64:
+        case OP_SQRT_F32:  case OP_SQRT_F64:
+        case OP_FLOOR_F32: case OP_FLOOR_F64:
+        case OP_CEIL_F32:  case OP_CEIL_F64:
+        case OP_TRUNC_F32: case OP_TRUNC_F64:
+        case OP_ROUND_F32: case OP_ROUND_F64: {
+            CHECK_BOUNDS(2);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            CHECK_REG(dst); CHECK_REG(src);
+            pc += 2;
+            switch (op) {
+            case OP_ABS_F32:   regs[dst].f32 = fabsf(regs[src].f32);   break;
+            case OP_ABS_F64:   regs[dst].f64 = fabs (regs[src].f64);   break;
+            case OP_SQRT_F32:  regs[dst].f32 = sqrtf(regs[src].f32);   break;
+            case OP_SQRT_F64:  regs[dst].f64 = sqrt (regs[src].f64);   break;
+            case OP_FLOOR_F32: regs[dst].f32 = floorf(regs[src].f32);  break;
+            case OP_FLOOR_F64: regs[dst].f64 = floor (regs[src].f64);  break;
+            case OP_CEIL_F32:  regs[dst].f32 = ceilf(regs[src].f32);   break;
+            case OP_CEIL_F64:  regs[dst].f64 = ceil (regs[src].f64);   break;
+            case OP_TRUNC_F32: regs[dst].f32 = truncf(regs[src].f32);  break;
+            case OP_TRUNC_F64: regs[dst].f64 = trunc (regs[src].f64);  break;
+            case OP_ROUND_F32: regs[dst].f32 = roundf(regs[src].f32);  break;
+            case OP_ROUND_F64: regs[dst].f64 = round (regs[src].f64);  break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* Float intrinsics — binary  [dst:u8][a:u8][b:u8]               */
+        /* ============================================================== */
+
+        case OP_MIN_F32:
+        case OP_MAX_F32:
+        case OP_MIN_F64:
+        case OP_MAX_F64:
+        case OP_COPYSIGN_F32:
+        case OP_COPYSIGN_F64: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t a   = read8LE(bytecode + pc + 1);
+            const uint8_t b   = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(a); CHECK_REG(b);
+            pc += 3;
+            switch (op) {
+            /* fminf/fmaxf propagate NaN correctly per C99 Annex F */
+            case OP_MIN_F32:      regs[dst].f32 = fminf(regs[a].f32, regs[b].f32);       break;
+            case OP_MAX_F32:      regs[dst].f32 = fmaxf(regs[a].f32, regs[b].f32);       break;
+            case OP_MIN_F64:      regs[dst].f64 = fmin (regs[a].f64, regs[b].f64);       break;
+            case OP_MAX_F64:      regs[dst].f64 = fmax (regs[a].f64, regs[b].f64);       break;
+            case OP_COPYSIGN_F32: regs[dst].f32 = copysignf(regs[a].f32, regs[b].f32);   break;
+            case OP_COPYSIGN_F64: regs[dst].f64 = copysign (regs[a].f64, regs[b].f64);   break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* Load with immediate offset  [dst:u8][base:u8][offset:i32]      */
+        /* dst = *(T*)((char*)base.ptr + offset)                          */
+        /* ============================================================== */
+
+        case OP_LOAD8_OFF:
+        case OP_LOAD8S_OFF:
+        case OP_LOAD16_OFF:
+        case OP_LOAD16S_OFF:
+        case OP_LOAD32_OFF:
+        case OP_LOAD32S_OFF:
+        case OP_LOAD64_OFF:
+        case OP_LOAD_PTR_OFF: {
+            CHECK_BOUNDS(6);
+            const uint8_t  dst    = read8LE  (bytecode + pc);
+            const uint8_t  base   = read8LE  (bytecode + pc + 1);
+            const int32_t  offset = read32SLE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(base);
+            pc += 6;
+            const void* p = (const char*)regs[base].ptr + offset;
+            regs[dst].u64 = 0;
+            switch (op) {
+            case OP_LOAD8_OFF:    { uint8_t  v; memcpy(&v, p, 1); regs[dst].u64 = (uint64_t)v; } break;
+            case OP_LOAD8S_OFF:   { int8_t   v; memcpy(&v, p, 1); regs[dst].i64 = (int64_t) v; } break;
+            case OP_LOAD16_OFF:   { uint16_t v; memcpy(&v, p, 2); regs[dst].u64 = (uint64_t)v; } break;
+            case OP_LOAD16S_OFF:  { int16_t  v; memcpy(&v, p, 2); regs[dst].i64 = (int64_t) v; } break;
+            case OP_LOAD32_OFF:   { uint32_t v; memcpy(&v, p, 4); regs[dst].u64 = (uint64_t)v; } break;
+            case OP_LOAD32S_OFF:  { int32_t  v; memcpy(&v, p, 4); regs[dst].i64 = (int64_t) v; } break;
+            case OP_LOAD64_OFF:   {              memcpy(&regs[dst].u64, p, 8);                  } break;
+            case OP_LOAD_PTR_OFF: {              memcpy(&regs[dst].ptr, p, sizeof(void*));      } break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* Store with immediate offset  [addr:u8][src:u8][offset:i32]     */
+        /* *(T*)((char*)addr.ptr + offset) = src                          */
+        /* ============================================================== */
+
+        case OP_STORE8_OFF:
+        case OP_STORE16_OFF:
+        case OP_STORE32_OFF:
+        case OP_STORE64_OFF:
+        case OP_STORE_PTR_OFF: {
+            CHECK_BOUNDS(6);
+            const uint8_t  addr   = read8LE  (bytecode + pc);
+            const uint8_t  src    = read8LE  (bytecode + pc + 1);
+            const int32_t  offset = read32SLE(bytecode + pc + 2);
+            CHECK_REG(addr); CHECK_REG(src);
+            pc += 6;
+            void* p = (char*)regs[addr].ptr + offset;
+            switch (op) {
+            case OP_STORE8_OFF:    { uint8_t  v = regs[src].u8;  memcpy(p, &v, 1);             } break;
+            case OP_STORE16_OFF:   { uint16_t v = regs[src].u16; memcpy(p, &v, 2);             } break;
+            case OP_STORE32_OFF:   { uint32_t v = regs[src].u32; memcpy(p, &v, 4);             } break;
+            case OP_STORE64_OFF:   { uint64_t v = regs[src].u64; memcpy(p, &v, 8);             } break;
+            case OP_STORE_PTR_OFF: { void*    v = regs[src].ptr; memcpy(p, &v, sizeof(void*)); } break;
+            default: break;
+            }
+        } break;
+
+        /* ============================================================== */
+        /* LEA_REG  [dst:u8][base:u8][idx:u8]                             */
+        /* dst.ptr = (char*)base.ptr + idx.i64                           */
+        /* ============================================================== */
+
+        case OP_LEA_REG: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t base= read8LE(bytecode + pc + 1);
+            const uint8_t idx = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(base); CHECK_REG(idx);
+            pc += 3;
+            regs[dst].ptr = (char*)regs[base].ptr + regs[idx].i64;
+        } break;
+
+        /* ============================================================== */
+        /* MEMCPY / MEMSET  [dst:u8][src:u8][len:u8]                      */
+        /* ============================================================== */
+
+        case OP_MEMCPY: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t src = read8LE(bytecode + pc + 1);
+            const uint8_t len = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(src); CHECK_REG(len);
+            pc += 3;
+            memmove(regs[dst].ptr, regs[src].ptr, (size_t)regs[len].i64);
+        } break;
+
+        case OP_MEMSET: {
+            CHECK_BOUNDS(3);
+            const uint8_t dst = read8LE(bytecode + pc);
+            const uint8_t val = read8LE(bytecode + pc + 1);
+            const uint8_t len = read8LE(bytecode + pc + 2);
+            CHECK_REG(dst); CHECK_REG(val); CHECK_REG(len);
+            pc += 3;
+            memset(regs[dst].ptr, regs[val].i32 & 0xFF, (size_t)regs[len].i64);
+        } break;
+
+        /* ============================================================== */
+        /* SWITCH  [reg:u8][count:u32][default:i32][off_0:i32]...[off_N]  */
+        /* ============================================================== */
+
+        case OP_SWITCH: {
+            CHECK_BOUNDS(9); /* reg + count + default = 1+4+4 */
+            const uint8_t  reg     = read8LE  (bytecode + pc);
+            const uint32_t count   = read32LE (bytecode + pc + 1);
+            const int32_t  def_off = read32SLE(bytecode + pc + 5);
+            CHECK_BOUNDS(9u + count * 4u);
+            CHECK_REG(reg);
+            pc += 9u;
+            const int32_t idx = regs[reg].i32;
+            int32_t chosen;
+            if (idx >= 0 && (uint32_t)idx < count) {
+                chosen = read32SLE(bytecode + pc + (uint32_t)idx * 4u);
+            } else {
+                chosen = def_off;
+            }
+            pc += count * 4u;
+            BRANCH_TARGET(pc, chosen, pc);
+        } break;
 
         default:
             VM_EXIT_ERR(VM_ERR_INVALID_OPCODE);

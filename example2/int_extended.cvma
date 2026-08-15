@@ -1,0 +1,242 @@
+# ============================================================================
+# CVM Text Assembly — Integer MIN/MAX, MULH, Unsigned CMP & Branches
+#                     (int_extended.cvma)
+# ============================================================================
+# Demonstrates:
+#   MIN_I32 / MAX_I32 / MIN_U32 / MAX_U32
+#   MIN_I64 / MAX_I64 / MIN_U64 / MAX_U64
+#   MULH_I32 / MULH_U32 / MULH_I64 / MULH_U64   (high-half multiply)
+#   CMP_U32 / CMP_U64                            (unsigned compare → -1/0/+1)
+#   IF_ULT / IF_UGE / IF_UGT / IF_ULE           (unsigned conditional branch)
+#
+# Each subroutine returns an integer checksum.
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: min_max_i32_demo() -> r0 = checksum
+#   MIN_I32(-5,  3) = -5
+#   MAX_I32(-5,  3) =  3
+#   MIN_I32( 7,  7) =  7
+#   MAX_I32( 7,  7) =  7
+#   MIN_I32(-100, 100) = -100
+#   MAX_I32(-100, 100) =  100
+# sum = -5+3+7+7+(-100)+100 = 12
+# ----------------------------------------------------------------------------
+min_max_i32_demo:
+    CONST_I32 r0, 0
+
+    CONST_I32 r1, -5
+    CONST_I32 r2, 3
+    MIN_I32   r3, r1, r2       # -5
+    ADD_I32   r0, r0, r3
+
+    MAX_I32   r3, r1, r2       # 3
+    ADD_I32   r0, r0, r3
+
+    CONST_I32 r1, 7
+    CONST_I32 r2, 7
+    MIN_I32   r3, r1, r2       # 7
+    ADD_I32   r0, r0, r3
+
+    MAX_I32   r3, r1, r2       # 7
+    ADD_I32   r0, r0, r3
+
+    CONST_I32 r1, -100
+    CONST_I32 r2, 100
+    MIN_I32   r3, r1, r2       # -100
+    ADD_I32   r0, r0, r3
+
+    MAX_I32   r3, r1, r2       # 100
+    ADD_I32   r0, r0, r3
+
+    RET r0                     # = 12
+
+# ----------------------------------------------------------------------------
+# Subroutine: min_max_u32_demo() -> r0 = checksum (i32 arithmetic)
+#   MIN_U32(0xFFFFFFFF, 1) = 1
+#   MAX_U32(0xFFFFFFFF, 1) = 0xFFFFFFFF = -1 as i32
+#   MIN_U32(10, 20) = 10
+#   MAX_U32(10, 20) = 20
+# sum (i32) = 1 + (-1) + 10 + 20 = 30
+# ----------------------------------------------------------------------------
+min_max_u32_demo:
+    CONST_I32 r0, 0
+
+    CONST_I32 r1, -1           # 0xFFFFFFFF as i32
+    CONST_I32 r2, 1
+    MIN_U32   r3, r1, r2       # unsigned min → 1
+    ADD_I32   r0, r0, r3
+
+    MAX_U32   r3, r1, r2       # unsigned max → 0xFFFFFFFF = -1 as i32
+    ADD_I32   r0, r0, r3       # +(-1)
+
+    CONST_I32 r1, 10
+    CONST_I32 r2, 20
+    MIN_U32   r3, r1, r2       # 10
+    ADD_I32   r0, r0, r3
+
+    MAX_U32   r3, r1, r2       # 20
+    ADD_I32   r0, r0, r3
+
+    RET r0                     # = 30
+
+# ----------------------------------------------------------------------------
+# Subroutine: mulh_demo() -> r0 = checksum
+#   MULH_I32(0x10000, 0x10000) = 1   (high 32 of 2^16*2^16=2^32)
+#   MULH_U32(0xFFFF, 0xFFFF) = 0xFFFE0001 >> 32 -> high = 0
+#     Actually: 0xFFFF * 0xFFFF = 0xFFFE0001 (fits in 32 bits, high=0)
+#   MULH_U32(0xFFFFFFFF, 0xFFFFFFFF) high = 0xFFFFFFFE = -2 as i32
+#   MULH_I64(0x100000000, 0x100000000) = 1  (2^32 * 2^32 = 2^64, high64=1)
+# sum = 1 + 0 + (-2) + 1 = 0
+# ----------------------------------------------------------------------------
+mulh_demo:
+    CONST_I32 r0, 0
+
+    CONST_I32 r1, 65536        # 0x10000
+    CONST_I32 r2, 65536
+    MULH_I32  r3, r1, r2       # high32 of 2^32 = 1
+    ADD_I32   r0, r0, r3
+
+    CONST_I32 r1, 65535        # 0xFFFF
+    CONST_I32 r2, 65535
+    MULH_U32  r3, r1, r2       # 0xFFFF*0xFFFF = 0xFFFE0001 fits in 32b, high=0
+    ADD_I32   r0, r0, r3
+
+    CONST_I32 r1, -1           # 0xFFFFFFFF
+    CONST_I32 r2, -1           # 0xFFFFFFFF
+    MULH_U32  r3, r1, r2       # high32 = 0xFFFFFFFE = -2 as i32
+    ADD_I32   r0, r0, r3
+
+    CONST_I64 r1, 4294967296   # 2^32
+    CONST_I64 r2, 4294967296
+    MULH_I64  r3, r1, r2       # high64 = 1
+    ADD_I32   r0, r0, r3
+
+    RET r0                     # = 0
+
+# ----------------------------------------------------------------------------
+# Subroutine: cmp_u32_demo() -> r0 = checksum
+#   CMP_U32(0xFFFFFFFF, 1) = +1
+#   CMP_U32(1, 0xFFFFFFFF) = -1
+#   CMP_U32(42, 42)        = 0
+#   CMP_U64(MAX_U64, 1)    = +1
+# sum = 1 + (-1) + 0 + 1 = 1
+# ----------------------------------------------------------------------------
+cmp_u32_demo:
+    CONST_I32 r0, 0
+
+    CONST_I32 r1, -1           # 0xFFFFFFFF unsigned
+    CONST_I32 r2, 1
+    CMP_U32   r3, r1, r2       # +1
+    ADD_I32   r0, r0, r3
+
+    CMP_U32   r3, r2, r1       # -1
+    ADD_I32   r0, r0, r3
+
+    CONST_I32 r1, 42
+    CONST_I32 r2, 42
+    CMP_U32   r3, r1, r2       # 0
+    ADD_I32   r0, r0, r3
+
+    CONST_I64 r1, -1           # MAX_U64 as signed i64
+    CONST_I64 r2, 1
+    CMP_U64   r3, r1, r2       # +1
+    ADD_I32   r0, r0, r3
+
+    RET r0                     # = 1
+
+# ----------------------------------------------------------------------------
+# Subroutine: unsigned_branch_demo() -> r0 = correct branches taken count
+#   Uses IF_ULT, IF_UGE, IF_UGT, IF_ULE
+#   Expect: 4 branches all taken correctly → r0 = 4
+# ----------------------------------------------------------------------------
+unsigned_branch_demo:
+    CONST_I32 r0, 0
+    CONST_I32 r1, 1
+    CONST_I32 r2, -1           # 0xFFFFFFFF unsigned
+
+    # IF_ULT: 1 < 0xFFFFFFFF (unsigned) → taken
+    IF_ULT    r1, r2, ult_taken
+    GOTO_16   ult_skip
+ult_taken:
+    ADD_I32   r0, r0, r1       # +1
+ult_skip:
+
+    # IF_UGE: 0xFFFFFFFF >= 1 (unsigned) → taken
+    IF_UGE    r2, r1, uge_taken
+    GOTO_16   uge_skip
+uge_taken:
+    ADD_I32   r0, r0, r1       # +1
+uge_skip:
+
+    # IF_UGT: 0xFFFFFFFF > 1 (unsigned) → taken
+    IF_UGT    r2, r1, ugt_taken
+    GOTO_16   ugt_skip
+ugt_taken:
+    ADD_I32   r0, r0, r1       # +1
+ugt_skip:
+
+    # IF_ULE: 1 <= 1 (unsigned) → taken
+    IF_ULE    r1, r1, ule_taken
+    GOTO_16   ule_skip
+ule_taken:
+    ADD_I32   r0, r0, r1       # +1
+ule_skip:
+
+    RET r0                     # = 4
+
+# ----------------------------------------------------------------------------
+# Subroutine: clamp_demo() — practical: clamp i32 to [lo, hi] using MIN/MAX
+#   clamp(-50, lo=-10, hi=10)  = -10
+#   clamp(0,   lo=-10, hi=10)  = 0
+#   clamp(99,  lo=-10, hi=10)  = 10
+# sum = -10 + 0 + 10 = 0
+# ----------------------------------------------------------------------------
+clamp_demo:
+    CONST_I32 r0, 0
+    CONST_I32 r4, -10          # lo
+    CONST_I32 r5, 10           # hi
+
+    # clamp(-50)
+    CONST_I32 r1, -50
+    MAX_I32   r1, r1, r4       # max(-50,-10) = -10
+    MIN_I32   r1, r1, r5       # min(-10,10)  = -10
+    ADD_I32   r0, r0, r1
+
+    # clamp(0)
+    CONST_I32 r1, 0
+    MAX_I32   r1, r1, r4       # max(0,-10) = 0
+    MIN_I32   r1, r1, r5       # min(0,10)  = 0
+    ADD_I32   r0, r0, r1
+
+    # clamp(99)
+    CONST_I32 r1, 99
+    MAX_I32   r1, r1, r4       # max(99,-10) = 99
+    MIN_I32   r1, r1, r5       # min(99,10)  = 10
+    ADD_I32   r0, r0, r1
+
+    RET r0                     # = 0
+
+# ============================================================================
+# Main entry
+# ============================================================================
+main_entry:
+    CALL_BC r0, min_max_i32_demo,    0  # 12
+    CALL_BC r1, min_max_u32_demo,    0  # 30
+    CALL_BC r2, mulh_demo,           0  # 0
+    CALL_BC r3, cmp_u32_demo,        0  # 1
+    CALL_BC r4, unsigned_branch_demo, 0 # 4
+    CALL_BC r5, clamp_demo,          0  # 0
+
+    # grand total = 12+30+0+1+4+0 = 47
+    ADD_I32 r6, r0, r1
+    ADD_I32 r6, r6, r2
+    ADD_I32 r6, r6, r3
+    ADD_I32 r6, r6, r4
+    ADD_I32 r6, r6, r5
+
+    RETURN r6                  # = 47

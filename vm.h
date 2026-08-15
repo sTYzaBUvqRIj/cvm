@@ -319,7 +319,170 @@ typedef enum {
     /* ------------------------------------------------------------------ */
 
     OP_CALL_BC,                 /* [dst:u8][target:u32][argc:u8][arg0..N] */
-    OP_RET                      /* [src:u8] (src=0xFF for void)           */
+    OP_RET,                     /* [src:u8] (src=0xFF for void)           */
+
+    /* ------------------------------------------------------------------ */
+    /*  Unsigned comparisons: dst.i32 = -1 | 0 | +1  (unsigned operands) */
+    /* ------------------------------------------------------------------ */
+
+    OP_CMP_U32,                 /* [dst:u8][lhs:u8][rhs:u8]               */
+    OP_CMP_U64,
+
+    /* ------------------------------------------------------------------ */
+    /*  Unsigned conditional branches — compare two u32 registers         */
+    /* ------------------------------------------------------------------ */
+
+    OP_IF_ULT,                  /* [A:u8][B:u8][offset:i16]               */
+    OP_IF_UGE,
+    OP_IF_UGT,
+    OP_IF_ULE,
+
+    /* ------------------------------------------------------------------ */
+    /*  SELECT — branchless conditional                                   */
+    /*  dst = (cond.i32 != 0) ? a : b                                     */
+    /* ------------------------------------------------------------------ */
+
+    OP_SELECT,                  /* [dst:u8][a:u8][b:u8][cond:u8]          */
+
+    /* ------------------------------------------------------------------ */
+    /*  Bit manipulation (shift amounts masked per-width)                 */
+    /*                                                                     */
+    /*  CLZ/CTZ: if src == 0, result is width (32 or 64).                */
+    /*  ROTL/ROTR: amount masked to low 5 bits (i32) / 6 bits (i64).    */
+    /* ------------------------------------------------------------------ */
+
+    OP_CLZ_I32,                 /* [dst:u8][src:u8]  count leading zeros  */
+    OP_CLZ_I64,
+    OP_CTZ_I32,                 /* [dst:u8][src:u8]  count trailing zeros */
+    OP_CTZ_I64,
+    OP_POPCNT_I32,              /* [dst:u8][src:u8]  count set bits       */
+    OP_POPCNT_I64,
+    OP_ROTL_I32,                /* [dst:u8][val:u8][amt:u8]  rotate left  */
+    OP_ROTR_I32,                /* [dst:u8][val:u8][amt:u8]  rotate right */
+    OP_ROTL_I64,
+    OP_ROTR_I64,
+
+    /* ------------------------------------------------------------------ */
+    /*  Integer ABS, MIN, MAX                                             */
+    /* ------------------------------------------------------------------ */
+
+    OP_ABS_I32,                 /* [dst:u8][src:u8]                       */
+    OP_ABS_I64,
+    OP_MIN_I32,                 /* [dst:u8][a:u8][b:u8]                   */
+    OP_MAX_I32,
+    OP_MIN_U32,
+    OP_MAX_U32,
+    OP_MIN_I64,
+    OP_MAX_I64,
+    OP_MIN_U64,
+    OP_MAX_U64,
+
+    /* ------------------------------------------------------------------ */
+    /*  MULH — high half of full-width multiplication                     */
+    /*                                                                     */
+    /*  MULH_I32: high 32 bits of signed 64-bit product                  */
+    /*  MULH_U32: high 32 bits of unsigned 64-bit product                */
+    /*  MULH_I64: high 64 bits of signed 128-bit product                 */
+    /*  MULH_U64: high 64 bits of unsigned 128-bit product               */
+    /* ------------------------------------------------------------------ */
+
+    OP_MULH_I32,                /* [dst:u8][a:u8][b:u8]                   */
+    OP_MULH_U32,
+    OP_MULH_I64,
+    OP_MULH_U64,
+
+    /* ------------------------------------------------------------------ */
+    /*  BOOL — normalize to 0 / 1                                        */
+    /*  dst.i32 = (src.i32 != 0) ? 1 : 0  (BOOL_I32)                    */
+    /*  dst.i32 = (src.i64 != 0) ? 1 : 0  (BOOL_I64)                    */
+    /* ------------------------------------------------------------------ */
+
+    OP_BOOL_I32,                /* [dst:u8][src:u8]                       */
+    OP_BOOL_I64,
+
+    /* ------------------------------------------------------------------ */
+    /*  Float intrinsics — unary                                          */
+    /* ------------------------------------------------------------------ */
+
+    OP_ABS_F32,                 /* [dst:u8][src:u8]  |x|                  */
+    OP_ABS_F64,
+    OP_SQRT_F32,                /* [dst:u8][src:u8]  √x  (NaN if x<0)    */
+    OP_SQRT_F64,
+    OP_FLOOR_F32,               /* [dst:u8][src:u8]  ⌊x⌋                  */
+    OP_FLOOR_F64,
+    OP_CEIL_F32,                /* [dst:u8][src:u8]  ⌈x⌉                  */
+    OP_CEIL_F64,
+    OP_TRUNC_F32,               /* [dst:u8][src:u8]  truncate toward zero */
+    OP_TRUNC_F64,
+    OP_ROUND_F32,               /* [dst:u8][src:u8]  round to nearest     */
+    OP_ROUND_F64,               /*   (halfway: round away from zero)      */
+
+    /* ------------------------------------------------------------------ */
+    /*  Float intrinsics — binary                                         */
+    /* ------------------------------------------------------------------ */
+
+    OP_MIN_F32,                 /* [dst:u8][a:u8][b:u8]  propagates NaN  */
+    OP_MAX_F32,
+    OP_MIN_F64,
+    OP_MAX_F64,
+    OP_COPYSIGN_F32,            /* [dst:u8][mag:u8][sign:u8]              */
+    OP_COPYSIGN_F64,            /* dst = |mag| with sign of sign operand  */
+
+    /* ------------------------------------------------------------------ */
+    /*  Load with immediate offset                                        */
+    /*  dst = *(T*)((char*)base.ptr + offset)                            */
+    /*  Encoding: [op:u16][dst:u8][base:u8][offset:i32]  = 8 bytes       */
+    /* ------------------------------------------------------------------ */
+
+    OP_LOAD8_OFF,               /* [dst:u8][base:u8][offset:i32]          */
+    OP_LOAD8S_OFF,
+    OP_LOAD16_OFF,
+    OP_LOAD16S_OFF,
+    OP_LOAD32_OFF,
+    OP_LOAD32S_OFF,
+    OP_LOAD64_OFF,
+    OP_LOAD_PTR_OFF,
+
+    /* ------------------------------------------------------------------ */
+    /*  Store with immediate offset                                       */
+    /*  *(T*)((char*)addr.ptr + offset) = src                            */
+    /*  Encoding: [op:u16][addr:u8][src:u8][offset:i32]  = 8 bytes       */
+    /* ------------------------------------------------------------------ */
+
+    OP_STORE8_OFF,              /* [addr:u8][src:u8][offset:i32]          */
+    OP_STORE16_OFF,
+    OP_STORE32_OFF,
+    OP_STORE64_OFF,
+    OP_STORE_PTR_OFF,
+
+    /* ------------------------------------------------------------------ */
+    /*  LEA_REG — variable-index pointer arithmetic                       */
+    /*  dst.ptr = (char*)base.ptr + idx.i64                              */
+    /* ------------------------------------------------------------------ */
+
+    OP_LEA_REG,                 /* [dst:u8][base:u8][idx:u8]              */
+
+    /* ------------------------------------------------------------------ */
+    /*  MEMCPY / MEMSET                                                   */
+    /*  MEMCPY: memmove(dst.ptr, src.ptr, len.i64)                       */
+    /*  MEMSET: memset(dst.ptr, val.i32 & 0xFF, len.i64)                 */
+    /* ------------------------------------------------------------------ */
+
+    OP_MEMCPY,                  /* [dst:u8][src:u8][len:u8]               */
+    OP_MEMSET,                  /* [dst:u8][val:u8][len:u8]               */
+
+    /* ------------------------------------------------------------------ */
+    /*  SWITCH — O(1) table dispatch                                      */
+    /*                                                                     */
+    /*  Encoding: [op:u16][reg:u8][count:u32][default:i32]               */
+    /*             [off_0:i32]...[off_N-1:i32]                            */
+    /*                                                                     */
+    /*  If 0 <= reg.i32 < count: jump by off[reg.i32] from next_pc.      */
+    /*  Otherwise: jump by default from next_pc.                          */
+    /*  Total size: 2 + 1 + 4 + 4 + count*4 = 11 + count*4 bytes.       */
+    /* ------------------------------------------------------------------ */
+
+    OP_SWITCH                   /* [reg:u8][count:u32][default:i32][...] */
 
 } VMOpcode;
 

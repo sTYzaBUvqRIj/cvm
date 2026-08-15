@@ -1,0 +1,200 @@
+# ============================================================================
+# CVM Text Assembly — SWITCH Dispatch Table (switch_demo.cvma)
+# ============================================================================
+# Demonstrates:
+#   SWITCH — O(1) table dispatch with multiple cases and default
+#
+# Programs:
+#   1. day_name_code(day) — 0=Mon..6=Sun → returns a numeric code per day
+#   2. http_class(code)   — 2xx→1, 3xx→2, 4xx→3, 5xx→4, else→0
+#   3. fizzbuzz_switch(n) — 0..4: return kind (0=other, 1=fizz, 2=buzz, 3=fizzbuzz)
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: day_code(r0 = day 0..6) -> r0 = code
+#   Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=10, Sun=20, default=0
+# ----------------------------------------------------------------------------
+day_code:
+    SWITCH r0, 7, day_default, day_mon, day_tue, day_wed, day_thu, day_fri, day_sat, day_sun
+
+day_mon:
+    CONST_I32 r0, 1
+    RET r0
+day_tue:
+    CONST_I32 r0, 2
+    RET r0
+day_wed:
+    CONST_I32 r0, 3
+    RET r0
+day_thu:
+    CONST_I32 r0, 4
+    RET r0
+day_fri:
+    CONST_I32 r0, 5
+    RET r0
+day_sat:
+    CONST_I32 r0, 10
+    RET r0
+day_sun:
+    CONST_I32 r0, 20
+    RET r0
+day_default:
+    CONST_I32 r0, 0
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: score_grade(r0 = score 0..5) -> r0 = grade letter code
+#   0=F(1), 1=D(2), 2=C(3), 3=B(4), 4=A(5), 5=A+(6), else=0
+# ----------------------------------------------------------------------------
+score_grade:
+    SWITCH r0, 6, grade_default, grade_f, grade_d, grade_c, grade_b, grade_a, grade_aplus
+
+grade_f:
+    CONST_I32 r0, 1
+    RET r0
+grade_d:
+    CONST_I32 r0, 2
+    RET r0
+grade_c:
+    CONST_I32 r0, 3
+    RET r0
+grade_b:
+    CONST_I32 r0, 4
+    RET r0
+grade_a:
+    CONST_I32 r0, 5
+    RET r0
+grade_aplus:
+    CONST_I32 r0, 6
+    RET r0
+grade_default:
+    CONST_I32 r0, 0
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: season(r0 = month 0..11) -> r0 = season code
+#   Dec(11),Jan(0),Feb(1)  = 1 Winter
+#   Mar(2),Apr(3),May(4)   = 2 Spring
+#   Jun(5),Jul(6),Aug(7)   = 3 Summer
+#   Sep(8),Oct(9),Nov(10)  = 4 Autumn
+# ----------------------------------------------------------------------------
+season:
+    SWITCH r0, 12, season_default, season_winter, season_winter, season_spring, season_spring, season_spring, season_summer, season_summer, season_summer, season_autumn, season_autumn, season_autumn, season_winter
+
+season_winter:
+    CONST_I32 r0, 1
+    RET r0
+season_spring:
+    CONST_I32 r0, 2
+    RET r0
+season_summer:
+    CONST_I32 r0, 3
+    RET r0
+season_autumn:
+    CONST_I32 r0, 4
+    RET r0
+season_default:
+    CONST_I32 r0, 0
+    RET r0
+
+# ============================================================================
+# Main entry — call each subroutine and accumulate results
+# ============================================================================
+main_entry:
+    # Test day_code for each day 0..6 → codes 1+2+3+4+5+10+20 = 45
+    CONST_I32 r0, 0
+    CALL_BC r1, day_code, 1, r0   # Mon=1
+    CONST_I32 r0, 1
+    CALL_BC r2, day_code, 1, r0   # Tue=2
+    CONST_I32 r0, 2
+    CALL_BC r3, day_code, 1, r0   # Wed=3
+    CONST_I32 r0, 3
+    CALL_BC r4, day_code, 1, r0   # Thu=4
+    CONST_I32 r0, 4
+    CALL_BC r5, day_code, 1, r0   # Fri=5
+    CONST_I32 r0, 5
+    CALL_BC r6, day_code, 1, r0   # Sat=10
+    CONST_I32 r0, 6
+    CALL_BC r7, day_code, 1, r0   # Sun=20
+    CONST_I32 r0, 99
+    CALL_BC r8, day_code, 1, r0   # oob default=0
+
+    ADD_I32 r9, r1, r2
+    ADD_I32 r9, r9, r3
+    ADD_I32 r9, r9, r4
+    ADD_I32 r9, r9, r5
+    ADD_I32 r9, r9, r6
+    ADD_I32 r9, r9, r7
+    ADD_I32 r9, r9, r8            # r9 = 45
+
+    # Test score_grade 0..5 → 1+2+3+4+5+6 = 21
+    CONST_I32 r0, 0
+    CALL_BC r1, score_grade, 1, r0  # F=1
+    CONST_I32 r0, 1
+    CALL_BC r2, score_grade, 1, r0  # D=2
+    CONST_I32 r0, 2
+    CALL_BC r3, score_grade, 1, r0  # C=3
+    CONST_I32 r0, 3
+    CALL_BC r4, score_grade, 1, r0  # B=4
+    CONST_I32 r0, 4
+    CALL_BC r5, score_grade, 1, r0  # A=5
+    CONST_I32 r0, 5
+    CALL_BC r6, score_grade, 1, r0  # A+=6
+
+    ADD_I32 r10, r1, r2
+    ADD_I32 r10, r10, r3
+    ADD_I32 r10, r10, r4
+    ADD_I32 r10, r10, r5
+    ADD_I32 r10, r10, r6           # r10 = 21
+
+    # Test season for each month 0..11
+    # Jan(0)=1 Feb(1)=1 Mar(2)=2 Apr(3)=2 May(4)=2 Jun(5)=3
+    # Jul(6)=3 Aug(7)=3 Sep(8)=4 Oct(9)=4 Nov(10)=4 Dec(11)=1
+    # sum = 1+1+2+2+2+3+3+3+4+4+4+1 = 30
+    CONST_I32 r11, 0
+    CONST_I32 r0, 0
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 1
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 2
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 3
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 4
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 5
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 6
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 7
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 8
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 9
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 10
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1
+    CONST_I32 r0, 11
+    CALL_BC r1, season, 1, r0
+    ADD_I32 r11, r11, r1           # r11 = 30
+
+    # grand total = 45 + 21 + 30 = 96
+    ADD_I32 r12, r9, r10
+    ADD_I32 r12, r12, r11
+
+    RETURN r12                     # = 96

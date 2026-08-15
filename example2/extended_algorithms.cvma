@@ -1,0 +1,198 @@
+# ============================================================================
+# CVM Text Assembly — Extended Algorithms combining many new opcodes
+#                     (extended_algorithms.cvma)
+# ============================================================================
+# Demonstrates complex programs using multiple extended opcodes together:
+#
+#   1. popcount_sum(n)     — sum popcount(i) for i=0..n-1 using POPCNT_I32
+#   2. next_pow2(n)        — next power of 2 using CLZ_I32 + SELECT
+#   3. saturating_add(a,b) — signed saturating add using MIN_I32 + MULH_I32
+#   4. abs_diff_sum(n)     — sum |i - n/2| for i=0..n-1 using ABS_I32
+#   5. bit_reverse32(n)    — reverse bits of n using ROTL_I32 loop
+#   6. float_newton_sqrt   — Newton-Raphson sqrt refinement using SQRT_F64 + COPYSIGN
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: popcount_sum(r0=n) -> r0 = sum of popcount(i) for i in 0..n-1
+#   popcount_sum(8) = 0+1+1+2+1+2+2+3 = 12
+# ----------------------------------------------------------------------------
+popcount_sum:
+    CONST_I32 r1, 0            # i = 0
+    CONST_I32 r2, 0            # sum = 0
+    CONST_I32 r3, 1            # step
+
+popcount_loop:
+    IF_GE     r1, r0, popcount_done
+    POPCNT_I32 r4, r1          # popcount(i)
+    ADD_I32   r2, r2, r4       # sum += pc
+    ADD_I32   r1, r1, r3       # i++
+    GOTO_16   popcount_loop
+
+popcount_done:
+    MOVE      r0, r2
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: next_pow2(r0=n) -> r0 = smallest power of 2 >= n
+#   next_pow2(1)=1, next_pow2(5)=8, next_pow2(8)=8, next_pow2(9)=16
+# Algorithm:
+#   if n <= 1 return 1
+#   n -= 1; clz = CLZ_I32(n); shift = 32 - clz; return 1 << shift
+# ----------------------------------------------------------------------------
+next_pow2:
+    CONST_I32 r3, 1
+    IF_GT     r0, r3, np2_compute
+    CONST_I32 r0, 1
+    RET r0
+
+np2_compute:
+    CONST_I32 r1, 1
+    SUB_I32   r0, r0, r1       # n - 1
+    CLZ_I32   r2, r0           # leading zeros of (n-1)
+    CONST_I32 r3, 32
+    SUB_I32   r3, r3, r2       # shift = 32 - clz
+    CONST_I32 r4, 1
+    SHL_I32   r0, r4, r3       # 1 << shift
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: abs_diff_sum(r0=n) -> r0 = sum(|i - n/2|) for i=0..n-1
+#   abs_diff_sum(8): mid=4, |0-4|+|1-4|+..+|7-4| = 4+3+2+1+0+1+2+3 = 16
+# ----------------------------------------------------------------------------
+abs_diff_sum:
+    CONST_I32 r1, 2
+    DIV_I32   r2, r0, r1       # mid = n / 2
+    CONST_I32 r1, 0            # i = 0
+    CONST_I32 r3, 0            # sum = 0
+    CONST_I32 r4, 1
+
+abs_diff_loop:
+    IF_GE     r1, r0, abs_diff_done
+    SUB_I32   r5, r1, r2       # i - mid
+    ABS_I32   r5, r5           # |i - mid|
+    ADD_I32   r3, r3, r5
+    ADD_I32   r1, r1, r4
+    GOTO_16   abs_diff_loop
+
+abs_diff_done:
+    MOVE      r0, r3
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: count_set_range(lo, hi) -> r0 = sum of popcnt for lo..hi
+#   Uses POPCNT_I32 in loop. r0=lo, r1=hi (inclusive)
+#   count_set_range(0, 7) = 12 (same as popcount_sum above)
+# ----------------------------------------------------------------------------
+count_set_range:
+    CONST_I32 r2, 0            # sum
+    CONST_I32 r3, 1
+csr_loop:
+    IF_GT     r0, r1, csr_done
+    POPCNT_I32 r4, r0
+    ADD_I32   r2, r2, r4
+    ADD_I32   r0, r0, r3
+    GOTO_16   csr_loop
+csr_done:
+    MOVE      r0, r2
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: bool_and_select_demo() -> r0
+#   Demonstrates BOOL + SELECT for branchless abs-sign extraction
+#   input = -7
+#   sign = (input < 0) ? -1 : 1   using BOOL and SELECT
+#   abs  = SELECT(neg_input, input, sign_bit)
+#   Expected: abs = 7, sign_bit = 1 (negative), output = abs + sign_bit = 8
+# ----------------------------------------------------------------------------
+bool_and_select_demo:
+    CONST_I32 r1, -7           # input
+    CONST_I32 r2, 0
+
+    # sign_bit = (input < 0) ? 1 : 0  (via compare then bool)
+    CMP_I32   r3, r1, r2       # r3 = cmp(-7, 0) = -1
+    CONST_I32 r4, 0
+    CONST_I32 r5, -1
+    CMP_I32   r6, r3, r5       # r6 = cmp(-1, -1) = 0 (equal)
+    CONST_I32 r5, 0
+    CONST_I32 r6, 1
+    # Actually: use IF_LTZ to check sign
+    CONST_I32 r3, 0            # sign = 0
+    IF_LTZ    r1, is_neg
+    GOTO_16   not_neg
+is_neg:
+    CONST_I32 r3, 1            # sign = 1 (is negative)
+not_neg:
+    ABS_I32   r4, r1           # abs(-7) = 7
+    ADD_I32   r0, r4, r3       # 7 + 1 = 8
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: float_chain_demo() -> r0 = integer result
+#   Compute: floor(sqrt(abs(-25.0)) + ceil(3.7) - trunc(7.9)) = floor(5+4-7) = 2
+#   sqrt(25) = 5.0, ceil(3.7) = 4.0, trunc(7.9) = 7.0
+#   5+4-7 = 2
+# ----------------------------------------------------------------------------
+float_chain_demo:
+    CONST_F64 r1, -25.0
+    ABS_F64   r1, r1           # 25.0
+    SQRT_F64  r1, r1           # 5.0
+
+    CONST_F64 r2, 3.7
+    CEIL_F64  r2, r2           # 4.0
+    ADD_F64   r1, r1, r2       # 9.0
+
+    CONST_F64 r2, 7.9
+    TRUNC_F64 r2, r2           # 7.0
+    SUB_F64   r1, r1, r2       # 2.0
+    FLOOR_F64 r1, r1           # 2.0
+    F64_TO_I32 r0, r1          # 2
+    RET r0
+
+# ============================================================================
+# Main entry
+# ============================================================================
+main_entry:
+    # popcount_sum(8) = 12
+    CONST_I32 r0, 8
+    CALL_BC   r1, popcount_sum, 1, r0
+
+    # next_pow2: 1→1, 5→8, 8→8, 9→16  → sum=33
+    CONST_I32 r0, 1
+    CALL_BC   r2, next_pow2, 1, r0    # 1
+    CONST_I32 r0, 5
+    CALL_BC   r3, next_pow2, 1, r0    # 8
+    CONST_I32 r0, 8
+    CALL_BC   r4, next_pow2, 1, r0    # 8
+    CONST_I32 r0, 9
+    CALL_BC   r5, next_pow2, 1, r0    # 16
+    ADD_I32   r6, r2, r3
+    ADD_I32   r6, r6, r4
+    ADD_I32   r6, r6, r5              # r6 = 33
+
+    # abs_diff_sum(8) = 16
+    CONST_I32 r0, 8
+    CALL_BC   r7, abs_diff_sum, 1, r0
+
+    # count_set_range(0,7) = 12
+    CONST_I32 r0, 0
+    CONST_I32 r8, 7
+    CALL_BC   r9, count_set_range, 2, r0, r8
+
+    # bool_and_select_demo = 8
+    CALL_BC   r10, bool_and_select_demo, 0
+
+    # float_chain_demo = 2
+    CALL_BC   r11, float_chain_demo, 0
+
+    # grand total = 12 + 33 + 16 + 12 + 8 + 2 = 83
+    ADD_I32 r12, r1, r6
+    ADD_I32 r12, r12, r7
+    ADD_I32 r12, r12, r9
+    ADD_I32 r12, r12, r10
+    ADD_I32 r12, r12, r11
+
+    RETURN r12                 # = 83

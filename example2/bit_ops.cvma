@@ -1,0 +1,222 @@
+# ============================================================================
+# CVM Text Assembly — Bit-Manipulation Extended Opcodes (bit_ops.cvma)
+# ============================================================================
+# Demonstrates:
+#   CLZ_I32 / CLZ_I64   — count leading zeros
+#   CTZ_I32 / CTZ_I64   — count trailing zeros
+#   POPCNT_I32/I64      — population count (number of set bits)
+#   ROTL_I32 / ROTR_I32 — 32-bit bit rotation
+#   ROTL_I64 / ROTR_I64 — 64-bit bit rotation
+#   ABS_I32  / ABS_I64  — integer absolute value
+#   BOOL_I32 / BOOL_I64 — normalize to 0 or 1
+#
+# All results are accumulated and checked against a known total.
+# Final RETURN value = accumulated checksum (must equal expected).
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: clz_demo() -> r0 = checksum of CLZ results
+#   CLZ_I32(0)          = 32
+#   CLZ_I32(1)          = 31
+#   CLZ_I32(0x80000000) = 0
+#   CLZ_I64(1)          = 63
+#   CLZ_I64(0)          = 64
+# sum = 32+31+0+63+64 = 190
+# ----------------------------------------------------------------------------
+clz_demo:
+    CONST_I32 r1, 0
+    CLZ_I32   r2, r1           # clz(0) = 32
+    CONST_I32 r1, 0
+    ADD_I32   r0, r2, r1       # acc = 32
+
+    CONST_I32 r1, 1
+    CLZ_I32   r2, r1           # clz(1) = 31
+    ADD_I32   r0, r0, r2       # acc = 63
+
+    CONST_I32 r1, -2147483648  # 0x80000000
+    CLZ_I32   r2, r1           # clz(0x80000000) = 0
+    ADD_I32   r0, r0, r2       # acc = 63
+
+    CONST_I64 r1, 1
+    CLZ_I64   r2, r1           # clz_64(1) = 63
+    ADD_I32   r0, r0, r2       # acc = 126
+
+    CONST_I64 r1, 0
+    CLZ_I64   r2, r1           # clz_64(0) = 64
+    ADD_I32   r0, r0, r2       # acc = 190
+
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: ctz_demo() -> r0 = checksum of CTZ results
+#   CTZ_I32(0) = 32, CTZ_I32(1) = 0, CTZ_I32(8) = 3, CTZ_I32(0x80000000) = 31
+#   CTZ_I64(2) = 1
+# sum = 32+0+3+31+1 = 67
+# ----------------------------------------------------------------------------
+ctz_demo:
+    CONST_I32 r1, 0
+    CTZ_I32   r2, r1           # ctz(0) = 32
+    CONST_I32 r0, 0
+    ADD_I32   r0, r0, r2       # acc = 32
+
+    CONST_I32 r1, 1
+    CTZ_I32   r2, r1           # ctz(1) = 0
+    ADD_I32   r0, r0, r2       # acc = 32
+
+    CONST_I32 r1, 8
+    CTZ_I32   r2, r1           # ctz(8) = 3
+    ADD_I32   r0, r0, r2       # acc = 35
+
+    CONST_I32 r1, -2147483648  # 0x80000000
+    CTZ_I32   r2, r1           # ctz = 31
+    ADD_I32   r0, r0, r2       # acc = 66
+
+    CONST_I64 r1, 2
+    CTZ_I64   r2, r1           # ctz_64(2) = 1
+    ADD_I32   r0, r0, r2       # acc = 67
+
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: popcnt_demo() -> r0 = checksum of POPCNT results
+#   POPCNT_I32(0)          = 0
+#   POPCNT_I32(0xFF)       = 8
+#   POPCNT_I32(0xAAAAAAAA) = 16
+#   POPCNT_I32(0xFFFFFFFF) = 32
+#   POPCNT_I64(all ones)   = 64
+# sum = 0+8+16+32+64 = 120
+# ----------------------------------------------------------------------------
+popcnt_demo:
+    CONST_I32 r1, 0
+    POPCNT_I32 r2, r1          # popcnt(0) = 0
+    CONST_I32 r0, 0
+    ADD_I32   r0, r0, r2       # acc = 0
+
+    CONST_I32 r1, 255          # 0xFF
+    POPCNT_I32 r2, r1          # popcnt(0xFF) = 8
+    ADD_I32   r0, r0, r2       # acc = 8
+
+    CONST_I32 r1, -1431655766  # 0xAAAAAAAA as signed
+    POPCNT_I32 r2, r1          # popcnt = 16
+    ADD_I32   r0, r0, r2       # acc = 24
+
+    CONST_I32 r1, -1           # 0xFFFFFFFF
+    POPCNT_I32 r2, r1          # popcnt = 32
+    ADD_I32   r0, r0, r2       # acc = 56
+
+    CONST_I64 r1, -1           # all-ones 64-bit
+    POPCNT_I64 r2, r1          # popcnt = 64
+    ADD_I32   r0, r0, r2       # acc = 120
+
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: rotation_demo() -> r0 = checksum of ROTL/ROTR results
+#   ROTL_I32(1, 1)           = 2
+#   ROTL_I32(1, 8)           = 256
+#   ROTR_I32(2, 1)           = 1
+#   ROTR_I32(0x80000000, 1)  = 0x40000000 = 1073741824
+#   ROTL_I64(1, 32)          = 0x100000000 (low32=0, high32=1 -> sum just take low32=0, add 1)
+# Use low 32 bits of each as contribution.
+# 2 + 256 + 1 + 1073741824 + 1 = 1073742084
+# Note: r0 is i32, so we accumulate with i32 (truncates naturally).
+# ----------------------------------------------------------------------------
+rotation_demo:
+    CONST_I32 r1, 1
+    CONST_I32 r2, 1
+    ROTL_I32  r3, r1, r2       # rotl(1,1) = 2
+    CONST_I32 r0, 0
+    ADD_I32   r0, r0, r3       # acc = 2
+
+    CONST_I32 r1, 1
+    CONST_I32 r2, 8
+    ROTL_I32  r3, r1, r2       # rotl(1,8) = 256
+    ADD_I32   r0, r0, r3       # acc = 258
+
+    CONST_I32 r1, 2
+    CONST_I32 r2, 1
+    ROTR_I32  r3, r1, r2       # rotr(2,1) = 1
+    ADD_I32   r0, r0, r3       # acc = 259
+
+    CONST_I32 r1, -2147483648  # 0x80000000
+    CONST_I32 r2, 1
+    ROTR_I32  r3, r1, r2       # rotr(0x80000000,1) = 0x40000000 = 1073741824
+    ADD_I32   r0, r0, r3       # acc = 1073742083
+
+    CONST_I64 r1, 1
+    CONST_I32 r2, 1
+    ROTL_I64  r3, r1, r2       # rotl_64(1,1) = 2 (low32 = 2)
+    ADD_I32   r0, r0, r3       # acc += 2 = 1073742085
+
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: abs_bool_demo() -> r0 = checksum
+#   ABS_I32(-42)      = 42
+#   ABS_I32(7)        = 7
+#   ABS_I64(-999)     = 999 (low32 used)
+#   BOOL_I32(0)       = 0
+#   BOOL_I32(42)      = 1
+#   BOOL_I32(-1)      = 1
+#   BOOL_I64(0)       = 0
+#   BOOL_I64(99999)   = 1
+# sum = 42+7+999+0+1+1+0+1 = 1051
+# ----------------------------------------------------------------------------
+abs_bool_demo:
+    CONST_I32 r1, -42
+    ABS_I32   r2, r1           # 42
+    CONST_I32 r0, 0
+    ADD_I32   r0, r0, r2       # acc = 42
+
+    CONST_I32 r1, 7
+    ABS_I32   r2, r1           # 7
+    ADD_I32   r0, r0, r2       # acc = 49
+
+    CONST_I64 r1, -999
+    ABS_I64   r2, r1           # 999 (i64, low32=999)
+    ADD_I32   r0, r0, r2       # acc = 1048
+
+    CONST_I32 r1, 0
+    BOOL_I32  r2, r1           # 0
+    ADD_I32   r0, r0, r2       # acc = 1048
+
+    CONST_I32 r1, 42
+    BOOL_I32  r2, r1           # 1
+    ADD_I32   r0, r0, r2       # acc = 1049
+
+    CONST_I32 r1, -1
+    BOOL_I32  r2, r1           # 1
+    ADD_I32   r0, r0, r2       # acc = 1050
+
+    CONST_I64 r1, 0
+    BOOL_I64  r2, r1           # 0
+    ADD_I32   r0, r0, r2       # acc = 1050
+
+    CONST_I64 r1, 99999
+    BOOL_I64  r2, r1           # 1
+    ADD_I32   r0, r0, r2       # acc = 1051
+
+    RET r0
+
+# ============================================================================
+# Main entry
+# ============================================================================
+main_entry:
+    CALL_BC r0, clz_demo,      0   # r0 = 190
+    CALL_BC r1, ctz_demo,      0   # r1 = 67
+    CALL_BC r2, popcnt_demo,   0   # r2 = 120
+    CALL_BC r3, rotation_demo, 0   # r3 = 1073742085
+    CALL_BC r4, abs_bool_demo, 0   # r4 = 1051
+
+    # Total checksum (i32 arithmetic, wraps normally):
+    # 190 + 67 + 120 + 1073742085 + 1051 = 1073743513
+    ADD_I32 r5, r0, r1
+    ADD_I32 r5, r5, r2
+    ADD_I32 r5, r5, r3
+    ADD_I32 r5, r5, r4
+
+    RETURN r5                   # = 1073743513

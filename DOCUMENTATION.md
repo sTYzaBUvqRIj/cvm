@@ -1,6 +1,6 @@
 # C/C++ Register VM — Opcode Reference
 
-Complete reference for every instruction in the VM bytecode instruction set.
+Complete reference for every instruction in the VM bytecode instruction set (~160 opcodes).
 
 ---
 
@@ -36,6 +36,18 @@ Complete reference for every instruction in the VM bytecode instruction set.
    - [Native Function Calls](#native-function-calls)
    - [Return](#return)
    - [Subroutines & Bytecode Calls](#subroutines--bytecode-calls)
+   - [Unsigned Comparisons & Branches](#unsigned-comparisons--branches)
+   - [SELECT — Branchless Conditional](#select--branchless-conditional)
+   - [Bit Manipulation](#bit-manipulation)
+   - [Integer ABS / MIN / MAX](#integer-abs--min--max)
+   - [MULH — High-Half Multiply](#mulh--high-half-multiply)
+   - [BOOL — Normalize to 0/1](#bool--normalize-to-01)
+   - [Float Intrinsics — Unary](#float-intrinsics--unary)
+   - [Float Intrinsics — Binary](#float-intrinsics--binary)
+   - [Load / Store with Immediate Offset](#load--store-with-immediate-offset)
+   - [LEA_REG — Variable-Index Pointer Arithmetic](#lea_reg--variable-index-pointer-arithmetic)
+   - [MEMCPY / MEMSET — Bulk Memory](#memcpy--memset--bulk-memory)
+   - [SWITCH — O(1) Table Dispatch](#switch--o1-table-dispatch)
 6. [Opcode Encoding Summary](#opcode-encoding-summary)
 7. [Public API](#public-api)
 
@@ -1508,6 +1520,332 @@ emit_ret_void(&bc);   // void return to caller
 
 ---
 
+---
+
+### Unsigned Comparisons & Branches
+
+#### `OP_CMP_U32` / `OP_CMP_U64` — Unsigned Three-Way Compare
+
+```
+Encoding:  [op:u16][dst:u8][lhs:u8][rhs:u8]
+Size:      5 bytes
+```
+
+Same result convention as `CMP_I32` (`-1 / 0 / +1`) but treats register values as **unsigned** integers.
+- `OP_CMP_U32` — compares `regs[lhs].u32` vs `regs[rhs].u32`
+- `OP_CMP_U64` — compares `regs[lhs].u64` vs `regs[rhs].u64`
+
+Result stored as `dst.i32`.
+
+---
+
+#### `OP_IF_ULT` / `OP_IF_UGE` / `OP_IF_UGT` / `OP_IF_ULE` — Unsigned Conditional Branches
+
+```
+Encoding:  [op:u16][A:u8][B:u8][offset:i16]
+Size:      6 bytes
+```
+
+Branch if `regs[A].u32 <op> regs[B].u32` (unsigned comparison).
+
+| Opcode | Condition | Mnemonic |
+|--------|-----------|----------|
+| `OP_IF_ULT` | A < B (unsigned) | unsigned less-than |
+| `OP_IF_UGE` | A >= B (unsigned) | unsigned greater-or-equal |
+| `OP_IF_UGT` | A > B (unsigned) | unsigned greater-than |
+| `OP_IF_ULE` | A <= B (unsigned) | unsigned less-or-equal |
+
+Offset is signed, relative to next instruction.
+
+---
+
+### SELECT — Branchless Conditional
+
+#### `OP_SELECT` — Conditional Register Select
+
+```
+Encoding:  [op:u16][dst:u8][a:u8][b:u8][cond:u8]
+Size:      6 bytes
+```
+
+```
+dst = (regs[cond].i32 != 0) ? regs[a] : regs[b]
+```
+
+Copies the full 64-bit register value. No branch instruction generated — purely a data-select.
+
+---
+
+### Bit Manipulation
+
+#### `OP_CLZ_I32` / `OP_CLZ_I64` — Count Leading Zeros
+
+```
+Encoding:  [op:u16][dst:u8][src:u8]
+Size:      4 bytes
+```
+
+Counts the number of leading zero bits.
+- `OP_CLZ_I32` — operates on `regs[src].u32`; returns 32 if src == 0
+- `OP_CLZ_I64` — operates on `regs[src].u64`; returns 64 if src == 0
+
+Result stored as `dst.i32`.
+
+---
+
+#### `OP_CTZ_I32` / `OP_CTZ_I64` — Count Trailing Zeros
+
+```
+Encoding:  [op:u16][dst:u8][src:u8]
+Size:      4 bytes
+```
+
+Counts the number of trailing zero bits.
+- `OP_CTZ_I32` — operates on `regs[src].u32`; returns 32 if src == 0
+- `OP_CTZ_I64` — operates on `regs[src].u64`; returns 64 if src == 0
+
+Result stored as `dst.i32`.
+
+---
+
+#### `OP_POPCNT_I32` / `OP_POPCNT_I64` — Population Count
+
+```
+Encoding:  [op:u16][dst:u8][src:u8]
+Size:      4 bytes
+```
+
+Counts the number of set (1) bits.
+- `OP_POPCNT_I32` — counts set bits in `regs[src].u32`; result in range [0, 32]
+- `OP_POPCNT_I64` — counts set bits in `regs[src].u64`; result in range [0, 64]
+
+Result stored as `dst.i32`.
+
+---
+
+#### `OP_ROTL_I32` / `OP_ROTR_I32` / `OP_ROTL_I64` / `OP_ROTR_I64` — Bit Rotation
+
+```
+Encoding:  [op:u16][dst:u8][val:u8][amt:u8]
+Size:      5 bytes
+```
+
+Rotates the bits of `regs[val]` left or right by `regs[amt]` positions.
+- **i32 variants**: rotation amount masked to low **5** bits (mod 32)
+- **i64 variants**: rotation amount masked to low **6** bits (mod 64)
+
+Wrapped bits appear on the opposite end — no bits are lost.
+
+---
+
+### Integer ABS / MIN / MAX
+
+#### `OP_ABS_I32` / `OP_ABS_I64` — Integer Absolute Value
+
+```
+Encoding:  [op:u16][dst:u8][src:u8]
+Size:      4 bytes
+```
+
+Sets `dst` to the absolute value of `src`.
+- `OP_ABS_I32` — `dst.i32 = (src.i32 < 0) ? -src.i32 : src.i32`
+- `OP_ABS_I64` — `dst.i64 = (src.i64 < 0) ? -src.i64 : src.i64`
+
+---
+
+#### `OP_MIN_I32` / `OP_MAX_I32` / `OP_MIN_U32` / `OP_MAX_U32` / `OP_MIN_I64` / `OP_MAX_I64` / `OP_MIN_U64` / `OP_MAX_U64`
+
+```
+Encoding:  [op:u16][dst:u8][a:u8][b:u8]
+Size:      5 bytes
+```
+
+Sets `dst` to the minimum or maximum of `regs[a]` and `regs[b]` using the indicated signed or unsigned interpretation.
+
+---
+
+### MULH — High-Half Multiply
+
+#### `OP_MULH_I32` / `OP_MULH_U32` / `OP_MULH_I64` / `OP_MULH_U64`
+
+```
+Encoding:  [op:u16][dst:u8][a:u8][b:u8]
+Size:      5 bytes
+```
+
+Computes the **high half** of a full-width product:
+
+| Opcode | Operation |
+|--------|-----------|
+| `OP_MULH_I32` | high 32 bits of signed 64-bit product `(int64_t)a.i32 * b.i32` |
+| `OP_MULH_U32` | high 32 bits of unsigned 64-bit product `(uint64_t)a.u32 * b.u32` |
+| `OP_MULH_I64` | high 64 bits of signed 128-bit product (via `__int128` or equivalent) |
+| `OP_MULH_U64` | high 64 bits of unsigned 128-bit product |
+
+Result stored in `dst` (i32 for the 32-bit variants, i64 for the 64-bit variants).
+
+---
+
+### BOOL — Normalize to 0/1
+
+#### `OP_BOOL_I32` / `OP_BOOL_I64`
+
+```
+Encoding:  [op:u16][dst:u8][src:u8]
+Size:      4 bytes
+```
+
+- `OP_BOOL_I32` — `dst.i32 = (regs[src].i32 != 0) ? 1 : 0`
+- `OP_BOOL_I64` — `dst.i32 = (regs[src].i64 != 0) ? 1 : 0`
+
+Useful to convert any integer to a canonical boolean without a branch.
+
+---
+
+### Float Intrinsics — Unary
+
+All unary float intrinsics share encoding `[op:u16][dst:u8][src:u8]` (4 bytes).
+
+| Opcode | Operation |
+|--------|-----------|
+| `OP_ABS_F32` | `dst.f32 = fabsf(src.f32)` |
+| `OP_ABS_F64` | `dst.f64 = fabs(src.f64)` |
+| `OP_SQRT_F32` | `dst.f32 = sqrtf(src.f32)` — NaN if src < 0 |
+| `OP_SQRT_F64` | `dst.f64 = sqrt(src.f64)` |
+| `OP_FLOOR_F32` | `dst.f32 = floorf(src.f32)` — round toward −∞ |
+| `OP_FLOOR_F64` | `dst.f64 = floor(src.f64)` |
+| `OP_CEIL_F32` | `dst.f32 = ceilf(src.f32)` — round toward +∞ |
+| `OP_CEIL_F64` | `dst.f64 = ceil(src.f64)` |
+| `OP_TRUNC_F32` | `dst.f32 = truncf(src.f32)` — round toward zero |
+| `OP_TRUNC_F64` | `dst.f64 = trunc(src.f64)` |
+| `OP_ROUND_F32` | `dst.f32 = roundf(src.f32)` — nearest, halfway away from zero |
+| `OP_ROUND_F64` | `dst.f64 = round(src.f64)` |
+
+NaN and Inf propagate naturally per IEEE-754.
+
+---
+
+### Float Intrinsics — Binary
+
+All binary float intrinsics share encoding `[op:u16][dst:u8][a:u8][b:u8]` (5 bytes).
+
+| Opcode | Operation |
+|--------|-----------|
+| `OP_MIN_F32` | `dst.f32 = fminf(a.f32, b.f32)` — propagates NaN |
+| `OP_MAX_F32` | `dst.f32 = fmaxf(a.f32, b.f32)` |
+| `OP_MIN_F64` | `dst.f64 = fmin(a.f64, b.f64)` |
+| `OP_MAX_F64` | `dst.f64 = fmax(a.f64, b.f64)` |
+| `OP_COPYSIGN_F32` | `dst.f32 = copysignf(a.f32, b.f32)` — magnitude of a, sign of b |
+| `OP_COPYSIGN_F64` | `dst.f64 = copysign(a.f64, b.f64)` |
+
+---
+
+### Load / Store with Immediate Offset
+
+```
+Load  encoding:  [op:u16][dst:u8][base:u8][offset:i32]    8 bytes
+Store encoding:  [op:u16][addr:u8][src:u8][offset:i32]   8 bytes
+```
+
+Accesses memory at `(char*)regs[base].ptr + offset` (load) or `(char*)regs[addr].ptr + offset` (store), where `offset` is a **signed 32-bit immediate**. Eliminates the need for a separate LEA when accessing struct fields at known offsets.
+
+**Load opcodes** (zero-extend to u64 unless signed variant):
+
+| Opcode | Width | Sign |
+|--------|-------|------|
+| `OP_LOAD8_OFF` | 8-bit | zero-extend |
+| `OP_LOAD8S_OFF` | 8-bit | sign-extend |
+| `OP_LOAD16_OFF` | 16-bit | zero-extend |
+| `OP_LOAD16S_OFF` | 16-bit | sign-extend |
+| `OP_LOAD32_OFF` | 32-bit | zero-extend |
+| `OP_LOAD32S_OFF` | 32-bit | sign-extend |
+| `OP_LOAD64_OFF` | 64-bit | — |
+| `OP_LOAD_PTR_OFF` | pointer | — |
+
+**Store opcodes** (value truncated to width):
+
+| Opcode | Width |
+|--------|-------|
+| `OP_STORE8_OFF` | 8-bit |
+| `OP_STORE16_OFF` | 16-bit |
+| `OP_STORE32_OFF` | 32-bit |
+| `OP_STORE64_OFF` | 64-bit |
+| `OP_STORE_PTR_OFF` | pointer |
+
+---
+
+### LEA_REG — Variable-Index Pointer Arithmetic
+
+#### `OP_LEA_REG` — Load Effective Address (Register Index)
+
+```
+Encoding:  [op:u16][dst:u8][base:u8][idx:u8]
+Size:      5 bytes
+```
+
+```c
+dst.ptr = (char*)regs[base].ptr + regs[idx].i64;
+```
+
+Like `OP_LEA` but uses a **register** for the offset instead of an immediate. Enables array element addressing when the index is only known at runtime.
+
+---
+
+### MEMCPY / MEMSET — Bulk Memory
+
+#### `OP_MEMCPY` — Memory Copy
+
+```
+Encoding:  [op:u16][dst:u8][src:u8][len:u8]
+Size:      5 bytes
+```
+
+```c
+memmove(regs[dst].ptr, regs[src].ptr, (size_t)regs[len].i64);
+```
+
+Uses `memmove` — handles overlapping regions safely.
+
+---
+
+#### `OP_MEMSET` — Memory Fill
+
+```
+Encoding:  [op:u16][dst:u8][val:u8][len:u8]
+Size:      5 bytes
+```
+
+```c
+memset(regs[dst].ptr, regs[val].i32 & 0xFF, (size_t)regs[len].i64);
+```
+
+Only the low 8 bits of `regs[val].i32` are used as the fill byte.
+
+---
+
+### SWITCH — O(1) Table Dispatch
+
+#### `OP_SWITCH` — Computed Jump via Dispatch Table
+
+```
+Encoding:  [op:u16][reg:u8][count:u32][default:i32][off_0:i32]...[off_N-1:i32]
+Size:      11 + count*4 bytes
+```
+
+Dispatch logic:
+```
+if (0 <= regs[reg].i32 < count)
+    pc += table_offsets[regs[reg].i32]    /* relative to next instruction */
+else
+    pc += default_offset
+```
+
+All offsets are signed 32-bit displacements relative to the instruction immediately after the SWITCH (i.e., `next_pc = pc_after_full_SWITCH_encoding`). O(1) dispatch regardless of number of cases.
+
+> **Assembler note:** In `.cvma`, write `SWITCH reg, count, default_label, case0_label, case1_label, ...`.
+> The assembler resolves all label offsets in the second pass.
+
+
 ## Opcode Encoding Summary
 
 | Opcode | Hex | Encoding | Size |
@@ -1614,6 +1952,74 @@ emit_ret_void(&bc);   // void return to caller
 | `OP_RETURN`    | 0x0063 | `[src:u8]` | 3 |
 | `OP_CALL_BC`   | 0x0064 | `[dst:u8][target:u32][argc:u8][arg0..N:u8]` | 8+argc |
 | `OP_RET`       | 0x0065 | `[src:u8]` | 3 |
+| `OP_CMP_U32`   | 0x0066 | `[dst:u8][lhs:u8][rhs:u8]` | 5 |
+| `OP_CMP_U64`   | 0x0067 | `[dst:u8][lhs:u8][rhs:u8]` | 5 |
+| `OP_IF_ULT`    | 0x0068 | `[A:u8][B:u8][offset:i16]` | 6 |
+| `OP_IF_UGE`    | 0x0069 | `[A:u8][B:u8][offset:i16]` | 6 |
+| `OP_IF_UGT`    | 0x006A | `[A:u8][B:u8][offset:i16]` | 6 |
+| `OP_IF_ULE`    | 0x006B | `[A:u8][B:u8][offset:i16]` | 6 |
+| `OP_SELECT`    | 0x006C | `[dst:u8][a:u8][b:u8][cond:u8]` | 6 |
+| `OP_CLZ_I32`   | 0x006D | `[dst:u8][src:u8]` | 4 |
+| `OP_CLZ_I64`   | 0x006E | `[dst:u8][src:u8]` | 4 |
+| `OP_CTZ_I32`   | 0x006F | `[dst:u8][src:u8]` | 4 |
+| `OP_CTZ_I64`   | 0x0070 | `[dst:u8][src:u8]` | 4 |
+| `OP_POPCNT_I32` | 0x0071 | `[dst:u8][src:u8]` | 4 |
+| `OP_POPCNT_I64` | 0x0072 | `[dst:u8][src:u8]` | 4 |
+| `OP_ROTL_I32`  | 0x0073 | `[dst:u8][val:u8][amt:u8]` | 5 |
+| `OP_ROTR_I32`  | 0x0074 | `[dst:u8][val:u8][amt:u8]` | 5 |
+| `OP_ROTL_I64`  | 0x0075 | `[dst:u8][val:u8][amt:u8]` | 5 |
+| `OP_ROTR_I64`  | 0x0076 | `[dst:u8][val:u8][amt:u8]` | 5 |
+| `OP_ABS_I32`   | 0x0077 | `[dst:u8][src:u8]` | 4 |
+| `OP_ABS_I64`   | 0x0078 | `[dst:u8][src:u8]` | 4 |
+| `OP_MIN_I32`   | 0x0079 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_I32`   | 0x007A | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MIN_U32`   | 0x007B | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_U32`   | 0x007C | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MIN_I64`   | 0x007D | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_I64`   | 0x007E | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MIN_U64`   | 0x007F | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_U64`   | 0x0080 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MULH_I32`  | 0x0081 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MULH_U32`  | 0x0082 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MULH_I64`  | 0x0083 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MULH_U64`  | 0x0084 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_BOOL_I32`  | 0x0085 | `[dst:u8][src:u8]` | 4 |
+| `OP_BOOL_I64`  | 0x0086 | `[dst:u8][src:u8]` | 4 |
+| `OP_ABS_F32`   | 0x0087 | `[dst:u8][src:u8]` | 4 |
+| `OP_ABS_F64`   | 0x0088 | `[dst:u8][src:u8]` | 4 |
+| `OP_SQRT_F32`  | 0x0089 | `[dst:u8][src:u8]` | 4 |
+| `OP_SQRT_F64`  | 0x008A | `[dst:u8][src:u8]` | 4 |
+| `OP_FLOOR_F32` | 0x008B | `[dst:u8][src:u8]` | 4 |
+| `OP_FLOOR_F64` | 0x008C | `[dst:u8][src:u8]` | 4 |
+| `OP_CEIL_F32`  | 0x008D | `[dst:u8][src:u8]` | 4 |
+| `OP_CEIL_F64`  | 0x008E | `[dst:u8][src:u8]` | 4 |
+| `OP_TRUNC_F32` | 0x008F | `[dst:u8][src:u8]` | 4 |
+| `OP_TRUNC_F64` | 0x0090 | `[dst:u8][src:u8]` | 4 |
+| `OP_ROUND_F32` | 0x0091 | `[dst:u8][src:u8]` | 4 |
+| `OP_ROUND_F64` | 0x0092 | `[dst:u8][src:u8]` | 4 |
+| `OP_MIN_F32`   | 0x0093 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_F32`   | 0x0094 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MIN_F64`   | 0x0095 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_MAX_F64`   | 0x0096 | `[dst:u8][a:u8][b:u8]` | 5 |
+| `OP_COPYSIGN_F32` | 0x0097 | `[dst:u8][mag:u8][sign:u8]` | 5 |
+| `OP_COPYSIGN_F64` | 0x0098 | `[dst:u8][mag:u8][sign:u8]` | 5 |
+| `OP_LOAD8_OFF`    | 0x0099 | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD8S_OFF`   | 0x009A | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD16_OFF`   | 0x009B | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD16S_OFF`  | 0x009C | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD32_OFF`   | 0x009D | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD32S_OFF`  | 0x009E | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD64_OFF`   | 0x009F | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_LOAD_PTR_OFF` | 0x00A0 | `[dst:u8][base:u8][offset:i32]` | 8 |
+| `OP_STORE8_OFF`   | 0x00A1 | `[addr:u8][src:u8][offset:i32]` | 8 |
+| `OP_STORE16_OFF`  | 0x00A2 | `[addr:u8][src:u8][offset:i32]` | 8 |
+| `OP_STORE32_OFF`  | 0x00A3 | `[addr:u8][src:u8][offset:i32]` | 8 |
+| `OP_STORE64_OFF`  | 0x00A4 | `[addr:u8][src:u8][offset:i32]` | 8 |
+| `OP_STORE_PTR_OFF`| 0x00A5 | `[addr:u8][src:u8][offset:i32]` | 8 |
+| `OP_LEA_REG`   | 0x00A6 | `[dst:u8][base:u8][idx:u8]` | 5 |
+| `OP_MEMCPY`    | 0x00A7 | `[dst:u8][src:u8][len:u8]` | 5 |
+| `OP_MEMSET`    | 0x00A8 | `[dst:u8][val:u8][len:u8]` | 5 |
+| `OP_SWITCH`    | 0x00A9 | `[reg:u8][count:u32][default:i32][off_0:i32]...[off_N-1:i32]` | 11+count×4 |
 
 ---
 

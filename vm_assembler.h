@@ -204,7 +204,43 @@ static int vm_assm_parse_opcode(const char* name, VMOpcode* out_op)
         { "IF_EQZ", OP_IF_EQZ }, { "IF_NEZ", OP_IF_NEZ }, { "IF_LTZ", OP_IF_LTZ }, { "IF_GEZ", OP_IF_GEZ }, { "IF_GTZ", OP_IF_GTZ }, { "IF_LEZ", OP_IF_LEZ },
         { "CALL", OP_CALL }, { "CALL_VOID", OP_CALL_VOID },
         { "CALL_BC", OP_CALL_BC }, { "RET", OP_RET }, { "RET_VOID", OP_RET },
-        { "RETURN_VOID", OP_RETURN_VOID }, { "RETURN", OP_RETURN }
+        { "RETURN_VOID", OP_RETURN_VOID }, { "RETURN", OP_RETURN },
+        /* Extended opcodes */
+        { "CMP_U32", OP_CMP_U32 }, { "CMP_U64", OP_CMP_U64 },
+        { "IF_ULT", OP_IF_ULT }, { "IF_UGE", OP_IF_UGE }, { "IF_UGT", OP_IF_UGT }, { "IF_ULE", OP_IF_ULE },
+        { "SELECT", OP_SELECT },
+        { "CLZ_I32", OP_CLZ_I32 }, { "CLZ_I64", OP_CLZ_I64 },
+        { "CTZ_I32", OP_CTZ_I32 }, { "CTZ_I64", OP_CTZ_I64 },
+        { "POPCNT_I32", OP_POPCNT_I32 }, { "POPCNT_I64", OP_POPCNT_I64 },
+        { "ROTL_I32", OP_ROTL_I32 }, { "ROTR_I32", OP_ROTR_I32 },
+        { "ROTL_I64", OP_ROTL_I64 }, { "ROTR_I64", OP_ROTR_I64 },
+        { "ABS_I32", OP_ABS_I32 }, { "ABS_I64", OP_ABS_I64 },
+        { "MIN_I32", OP_MIN_I32 }, { "MAX_I32", OP_MAX_I32 },
+        { "MIN_U32", OP_MIN_U32 }, { "MAX_U32", OP_MAX_U32 },
+        { "MIN_I64", OP_MIN_I64 }, { "MAX_I64", OP_MAX_I64 },
+        { "MIN_U64", OP_MIN_U64 }, { "MAX_U64", OP_MAX_U64 },
+        { "MULH_I32", OP_MULH_I32 }, { "MULH_U32", OP_MULH_U32 },
+        { "MULH_I64", OP_MULH_I64 }, { "MULH_U64", OP_MULH_U64 },
+        { "BOOL_I32", OP_BOOL_I32 }, { "BOOL_I64", OP_BOOL_I64 },
+        { "ABS_F32", OP_ABS_F32 }, { "ABS_F64", OP_ABS_F64 },
+        { "SQRT_F32", OP_SQRT_F32 }, { "SQRT_F64", OP_SQRT_F64 },
+        { "FLOOR_F32", OP_FLOOR_F32 }, { "FLOOR_F64", OP_FLOOR_F64 },
+        { "CEIL_F32", OP_CEIL_F32 }, { "CEIL_F64", OP_CEIL_F64 },
+        { "TRUNC_F32", OP_TRUNC_F32 }, { "TRUNC_F64", OP_TRUNC_F64 },
+        { "ROUND_F32", OP_ROUND_F32 }, { "ROUND_F64", OP_ROUND_F64 },
+        { "MIN_F32", OP_MIN_F32 }, { "MAX_F32", OP_MAX_F32 },
+        { "MIN_F64", OP_MIN_F64 }, { "MAX_F64", OP_MAX_F64 },
+        { "COPYSIGN_F32", OP_COPYSIGN_F32 }, { "COPYSIGN_F64", OP_COPYSIGN_F64 },
+        { "LOAD8_OFF", OP_LOAD8_OFF }, { "LOAD8S_OFF", OP_LOAD8S_OFF },
+        { "LOAD16_OFF", OP_LOAD16_OFF }, { "LOAD16S_OFF", OP_LOAD16S_OFF },
+        { "LOAD32_OFF", OP_LOAD32_OFF }, { "LOAD32S_OFF", OP_LOAD32S_OFF },
+        { "LOAD64_OFF", OP_LOAD64_OFF }, { "LOAD_PTR_OFF", OP_LOAD_PTR_OFF },
+        { "STORE8_OFF", OP_STORE8_OFF }, { "STORE16_OFF", OP_STORE16_OFF },
+        { "STORE32_OFF", OP_STORE32_OFF }, { "STORE64_OFF", OP_STORE64_OFF },
+        { "STORE_PTR_OFF", OP_STORE_PTR_OFF },
+        { "LEA_REG", OP_LEA_REG },
+        { "MEMCPY", OP_MEMCPY }, { "MEMSET", OP_MEMSET },
+        { "SWITCH", OP_SWITCH }
     };
     size_t count = sizeof(map) / sizeof(map[0]);
     for (size_t i = 0; i < count; i++) {
@@ -410,6 +446,43 @@ static int vm_assm_calc_inst_size(VMOpcode op, int num_tokens, char* tokens[])
         case OP_RET:           return 3;
         case OP_RETURN_VOID:  return 2;
         case OP_RETURN:       return 3;
+
+        /* Extended opcodes sizes */
+        case OP_CMP_U32: case OP_CMP_U64:
+        case OP_ROTL_I32: case OP_ROTR_I32: case OP_ROTL_I64: case OP_ROTR_I64:
+        case OP_MIN_I32: case OP_MAX_I32: case OP_MIN_U32: case OP_MAX_U32:
+        case OP_MIN_I64: case OP_MAX_I64: case OP_MIN_U64: case OP_MAX_U64:
+        case OP_MULH_I32: case OP_MULH_U32: case OP_MULH_I64: case OP_MULH_U64:
+        case OP_MIN_F32: case OP_MAX_F32: case OP_MIN_F64: case OP_MAX_F64:
+        case OP_COPYSIGN_F32: case OP_COPYSIGN_F64:
+        case OP_LEA_REG: case OP_MEMCPY: case OP_MEMSET:
+            return 5;
+        case OP_CLZ_I32: case OP_CLZ_I64: case OP_CTZ_I32: case OP_CTZ_I64:
+        case OP_POPCNT_I32: case OP_POPCNT_I64:
+        case OP_ABS_I32: case OP_ABS_I64:
+        case OP_BOOL_I32: case OP_BOOL_I64:
+        case OP_ABS_F32: case OP_ABS_F64:
+        case OP_SQRT_F32: case OP_SQRT_F64:
+        case OP_FLOOR_F32: case OP_FLOOR_F64: case OP_CEIL_F32: case OP_CEIL_F64:
+        case OP_TRUNC_F32: case OP_TRUNC_F64: case OP_ROUND_F32: case OP_ROUND_F64:
+            return 4;
+        case OP_SELECT:
+            return 6;
+        case OP_IF_ULT: case OP_IF_UGE: case OP_IF_UGT: case OP_IF_ULE:
+            return 6;
+        case OP_LOAD8_OFF: case OP_LOAD8S_OFF: case OP_LOAD16_OFF: case OP_LOAD16S_OFF:
+        case OP_LOAD32_OFF: case OP_LOAD32S_OFF: case OP_LOAD64_OFF: case OP_LOAD_PTR_OFF:
+        case OP_STORE8_OFF: case OP_STORE16_OFF: case OP_STORE32_OFF:
+        case OP_STORE64_OFF: case OP_STORE_PTR_OFF:
+            return 8;
+        case OP_SWITCH: {
+            /* SWITCH reg count label_default label_0...label_N-1 */
+            /* num_tokens: 0=SWITCH 1=reg 2=count 3=default 4..N+3=cases */
+            if (num_tokens < 3) return 0;
+            int64_t n = 0;
+            if (!vm_assm_parse_int64(tokens[2], &n) || n < 0) return 0;
+            return (int)(11 + n * 4);
+        }
 
         default:              return 0;
     }
@@ -861,6 +934,143 @@ static VMAssembleResult vm_assemble(const char* source_text)
 
             default:
                 goto parse_err;
+
+            /* ==== Extended opcode assembler cases ==== */
+
+            /* 3-reg binary (same as ADD_I32 pattern) */
+            case OP_CMP_U32: case OP_CMP_U64:
+            case OP_ROTL_I32: case OP_ROTR_I32: case OP_ROTL_I64: case OP_ROTR_I64:
+            case OP_MIN_I32: case OP_MAX_I32: case OP_MIN_U32: case OP_MAX_U32:
+            case OP_MIN_I64: case OP_MAX_I64: case OP_MIN_U64: case OP_MAX_U64:
+            case OP_MULH_I32: case OP_MULH_U32: case OP_MULH_I64: case OP_MULH_U64:
+            case OP_MIN_F32: case OP_MAX_F32: case OP_MIN_F64: case OP_MAX_F64:
+            case OP_COPYSIGN_F32: case OP_COPYSIGN_F64:
+            case OP_LEA_REG: case OP_MEMCPY: case OP_MEMSET: {
+                uint16_t d=0, a=0, b=0;
+                if (ntok < 4) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &d)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &a)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[3], &b)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)d);
+                vm_assm_emit_u8(&res, (uint8_t)a);
+                vm_assm_emit_u8(&res, (uint8_t)b);
+                break;
+            }
+            /* 2-reg unary */
+            case OP_CLZ_I32: case OP_CLZ_I64: case OP_CTZ_I32: case OP_CTZ_I64:
+            case OP_POPCNT_I32: case OP_POPCNT_I64:
+            case OP_ABS_I32: case OP_ABS_I64:
+            case OP_BOOL_I32: case OP_BOOL_I64:
+            case OP_ABS_F32: case OP_ABS_F64:
+            case OP_SQRT_F32: case OP_SQRT_F64:
+            case OP_FLOOR_F32: case OP_FLOOR_F64: case OP_CEIL_F32: case OP_CEIL_F64:
+            case OP_TRUNC_F32: case OP_TRUNC_F64: case OP_ROUND_F32: case OP_ROUND_F64: {
+                uint16_t d=0, s=0;
+                if (ntok < 3) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &d)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &s)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)d);
+                vm_assm_emit_u8(&res, (uint8_t)s);
+                break;
+            }
+            /* SELECT [dst][a][b][cond] */
+            case OP_SELECT: {
+                uint16_t d=0, a=0, b=0, c=0;
+                if (ntok < 5) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &d)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &a)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[3], &b)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[4], &c)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)d);
+                vm_assm_emit_u8(&res, (uint8_t)a);
+                vm_assm_emit_u8(&res, (uint8_t)b);
+                vm_assm_emit_u8(&res, (uint8_t)c);
+                break;
+            }
+            /* Unsigned conditional branches (same as IF_EQ pattern) */
+            case OP_IF_ULT: case OP_IF_UGE: case OP_IF_UGT: case OP_IF_ULE: {
+                uint16_t rA=0, rB=0;
+                if (ntok < 4) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &rA)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &rB)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)rA);
+                vm_assm_emit_u8(&res, (uint8_t)rB);
+                /* Resolve label or direct offset */
+                size_t tgt_pc = 0;
+                int64_t raw_off = 0;
+                int16_t branch_off = 0;
+                if (vm_assm_find_label(&labels, tokens[3], &tgt_pc)) {
+                    branch_off = (int16_t)((int64_t)tgt_pc - (int64_t)(current_pc + (size_t)inst_size));
+                } else if (vm_assm_parse_int64(tokens[3], &raw_off)) {
+                    branch_off = (int16_t)raw_off;
+                } else {
+                    goto parse_err;
+                }
+                vm_assm_emit_u16(&res, (uint16_t)branch_off);
+                break;
+            }
+            /* Load with offset [dst][base][offset:i32] */
+            case OP_LOAD8_OFF: case OP_LOAD8S_OFF: case OP_LOAD16_OFF: case OP_LOAD16S_OFF:
+            case OP_LOAD32_OFF: case OP_LOAD32S_OFF: case OP_LOAD64_OFF: case OP_LOAD_PTR_OFF: {
+                uint16_t d=0, b=0;
+                int64_t  off=0;
+                if (ntok < 4) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &d)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &b)) goto parse_err;
+                if (!vm_assm_parse_int64(tokens[3], &off)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)d);
+                vm_assm_emit_u8(&res, (uint8_t)b);
+                vm_assm_emit_u32(&res, (uint32_t)(int32_t)off);
+                break;
+            }
+            /* Store with offset [addr][src][offset:i32] */
+            case OP_STORE8_OFF: case OP_STORE16_OFF: case OP_STORE32_OFF:
+            case OP_STORE64_OFF: case OP_STORE_PTR_OFF: {
+                uint16_t a=0, s=0;
+                int64_t  off=0;
+                if (ntok < 4) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &a)) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[2], &s)) goto parse_err;
+                if (!vm_assm_parse_int64(tokens[3], &off)) goto parse_err;
+                vm_assm_emit_u8(&res, (uint8_t)a);
+                vm_assm_emit_u8(&res, (uint8_t)s);
+                vm_assm_emit_u32(&res, (uint32_t)(int32_t)off);
+                break;
+            }
+            /* SWITCH reg count label_default label_0 ... label_N-1 */
+            case OP_SWITCH: {
+                /* tokens: 0=SWITCH 1=reg 2=count 3=default_label 4..3+N=case labels */
+                uint16_t reg = 0;
+                int64_t  n = 0;
+                if (ntok < 4) goto parse_err;
+                if (!vm_assm_parse_reg(tokens[1], &reg)) goto parse_err;
+                if (!vm_assm_parse_int64(tokens[2], &n) || n < 0) goto parse_err;
+                if (ntok < 4 + (int)n) goto parse_err;
+                /* switch_end = current_pc + inst_size */
+                size_t switch_end = current_pc + (size_t)inst_size;
+                vm_assm_emit_u8(&res, (uint8_t)reg);
+                vm_assm_emit_u32(&res, (uint32_t)n);
+                /* default */
+                { size_t tgt=0; int64_t raw=0; int16_t off16=0; (void)off16;
+                  int32_t off32=0;
+                  if (vm_assm_find_label(&labels, tokens[3], &tgt)) {
+                      off32 = (int32_t)((int64_t)tgt - (int64_t)switch_end);
+                  } else if (vm_assm_parse_int64(tokens[3], &raw)) {
+                      off32 = (int32_t)raw;
+                  } else { goto parse_err; }
+                  vm_assm_emit_u32(&res, (uint32_t)off32);
+                }
+                for (int64_t ci = 0; ci < n; ci++) {
+                    size_t tgt=0; int64_t raw=0; int32_t off32=0;
+                    if (vm_assm_find_label(&labels, tokens[4 + (int)ci], &tgt)) {
+                        off32 = (int32_t)((int64_t)tgt - (int64_t)switch_end);
+                    } else if (vm_assm_parse_int64(tokens[4 + (int)ci], &raw)) {
+                        off32 = (int32_t)raw;
+                    } else { goto parse_err; }
+                    vm_assm_emit_u32(&res, (uint32_t)off32);
+                }
+                break;
+            }
         }
 
         current_pc += (size_t)inst_size;

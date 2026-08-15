@@ -1,0 +1,213 @@
+# ============================================================================
+# CVM Text Assembly — Float Math Intrinsics (float_intrinsics.cvma)
+# ============================================================================
+# Demonstrates:
+#   ABS_F32 / ABS_F64       — absolute value
+#   SQRT_F32 / SQRT_F64     — square root
+#   FLOOR_F32 / FLOOR_F64   — floor (round down)
+#   CEIL_F32  / CEIL_F64    — ceiling (round up)
+#   TRUNC_F32 / TRUNC_F64   — truncate toward zero
+#   ROUND_F32 / ROUND_F64   — round to nearest
+#   MIN_F32 / MAX_F32       — float minimum / maximum
+#   MIN_F64 / MAX_F64       — double minimum / maximum
+#   COPYSIGN_F32/F64        — copy sign from second operand
+#   SELECT                  — branchless conditional select
+#
+# Each subroutine returns an integer result suitable for RETURN.
+# ============================================================================
+
+.registers 16
+
+GOTO_16 main_entry
+
+# ----------------------------------------------------------------------------
+# Subroutine: abs_sqrt_demo() -> r0 = 1 if all pass, 0 otherwise
+#   ABS_F32(-3.5) = 3.5  => floor => 3 (int)
+#   SQRT_F32(16.0) = 4.0 => trunc => 4
+#   ABS_F64(-7.25) = 7.25 => floor => 7
+#   SQRT_F64(9.0) = 3.0  => trunc => 3
+# sum = 3+4+7+3 = 17
+# ----------------------------------------------------------------------------
+abs_sqrt_demo:
+    CONST_F32  r1, -3.5
+    ABS_F32    r2, r1          # 3.5
+    FLOOR_F32  r2, r2          # 3.0
+    F32_TO_I32 r2, r2          # 3
+    CONST_I32  r0, 0
+    ADD_I32    r0, r0, r2      # acc = 3
+
+    CONST_F32  r1, 16.0
+    SQRT_F32   r2, r1          # 4.0
+    TRUNC_F32  r2, r2          # 4.0
+    F32_TO_I32 r2, r2          # 4
+    ADD_I32    r0, r0, r2      # acc = 7
+
+    CONST_F64  r1, -7.25
+    ABS_F64    r2, r1          # 7.25
+    FLOOR_F64  r2, r2          # 7.0
+    F64_TO_I32 r2, r2          # 7
+    ADD_I32    r0, r0, r2      # acc = 14
+
+    CONST_F64  r1, 9.0
+    SQRT_F64   r2, r1          # 3.0
+    TRUNC_F64  r2, r2          # 3.0
+    F64_TO_I32 r2, r2          # 3
+    ADD_I32    r0, r0, r2      # acc = 17
+
+    RET r0
+
+# ----------------------------------------------------------------------------
+# Subroutine: floor_ceil_trunc_round_demo() -> r0 = sum of i32 results
+#   FLOOR_F32(2.9) = 2,   CEIL_F32(2.1) = 3
+#   FLOOR_F32(-1.1)= -2,  CEIL_F32(-1.9)= -1
+#   TRUNC_F32(3.7) = 3,   TRUNC_F32(-3.7) = -3
+#   ROUND_F32(0.5) = 1,   ROUND_F32(2.4) = 2
+#   FLOOR_F64(5.9) = 5,   CEIL_F64(-0.1) = 0
+# sum = 2+3+(-2)+(-1)+3+(-3)+1+2+5+0 = 10
+# ----------------------------------------------------------------------------
+floor_ceil_trunc_round_demo:
+    CONST_I32 r0, 0
+
+    CONST_F32 r1, 2.9
+    FLOOR_F32 r2, r1
+    F32_TO_I32 r2, r2          # 2
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, 2.1
+    CEIL_F32  r2, r1
+    F32_TO_I32 r2, r2          # 3
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, -1.1
+    FLOOR_F32 r2, r1
+    F32_TO_I32 r2, r2          # -2
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, -1.9
+    CEIL_F32  r2, r1
+    F32_TO_I32 r2, r2          # -1
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, 3.7
+    TRUNC_F32 r2, r1
+    F32_TO_I32 r2, r2          # 3
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, -3.7
+    TRUNC_F32 r2, r1
+    F32_TO_I32 r2, r2          # -3
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, 0.5
+    ROUND_F32 r2, r1
+    F32_TO_I32 r2, r2          # 1
+    ADD_I32   r0, r0, r2
+
+    CONST_F32 r1, 2.4
+    ROUND_F32 r2, r1
+    F32_TO_I32 r2, r2          # 2
+    ADD_I32   r0, r0, r2
+
+    CONST_F64 r1, 5.9
+    FLOOR_F64 r2, r1
+    F64_TO_I32 r2, r2          # 5
+    ADD_I32   r0, r0, r2
+
+    CONST_F64 r1, -0.1
+    CEIL_F64  r2, r1
+    F64_TO_I32 r2, r2          # 0
+    ADD_I32   r0, r0, r2
+
+    RET r0                     # = 10
+
+# ----------------------------------------------------------------------------
+# Subroutine: min_max_copysign_demo() -> r0 = integer result
+#   MIN_F32(2.0,5.0) = 2.0 -> i32 = 2
+#   MAX_F32(2.0,5.0) = 5.0 -> i32 = 5
+#   MIN_F64(-3.0,1.0) = -3.0 -> i32 = -3
+#   MAX_F64(-3.0,1.0) = 1.0 -> i32 = 1
+#   COPYSIGN_F32(-4.0, 1.0) = 4.0 -> i32 = 4
+#   COPYSIGN_F64(7.0, -1.0) = -7.0 -> i32 = -7
+# sum = 2+5+(-3)+1+4+(-7) = 2
+# ----------------------------------------------------------------------------
+min_max_copysign_demo:
+    CONST_I32 r0, 0
+
+    CONST_F32 r1, 2.0
+    CONST_F32 r2, 5.0
+    MIN_F32   r3, r1, r2
+    F32_TO_I32 r3, r3          # 2
+    ADD_I32   r0, r0, r3
+
+    MAX_F32   r3, r1, r2
+    F32_TO_I32 r3, r3          # 5
+    ADD_I32   r0, r0, r3
+
+    CONST_F64 r1, -3.0
+    CONST_F64 r2, 1.0
+    MIN_F64   r3, r1, r2
+    F64_TO_I32 r3, r3          # -3
+    ADD_I32   r0, r0, r3
+
+    MAX_F64   r3, r1, r2
+    F64_TO_I32 r3, r3          # 1
+    ADD_I32   r0, r0, r3
+
+    CONST_F32 r1, -4.0
+    CONST_F32 r2, 1.0
+    COPYSIGN_F32 r3, r1, r2    # +4.0
+    F32_TO_I32 r3, r3          # 4
+    ADD_I32   r0, r0, r3
+
+    CONST_F64 r1, 7.0
+    CONST_F64 r2, -1.0
+    COPYSIGN_F64 r3, r1, r2    # -7.0
+    F64_TO_I32 r3, r3          # -7
+    ADD_I32   r0, r0, r3
+
+    RET r0                     # = 2
+
+# ----------------------------------------------------------------------------
+# Subroutine: select_demo() -> r0 = sum demonstrating SELECT branchless
+#   SELECT r0, r_true, r_false, r_cond
+#   SELECT(100, 200, cond=1) = 100
+#   SELECT(100, 200, cond=0) = 200
+#   SELECT(-5, 5, cond=cmp(-3,0)=-1≠0) = -5  (any nonzero is true)
+# sum = 100 + 200 + (-5) = 295
+# ----------------------------------------------------------------------------
+select_demo:
+    CONST_I32 r0, 0
+
+    CONST_I32 r1, 100          # a
+    CONST_I32 r2, 200          # b
+    CONST_I32 r3, 1            # cond = true
+    SELECT    r4, r1, r2, r3   # 100
+    ADD_I32   r0, r0, r4
+
+    CONST_I32 r3, 0            # cond = false
+    SELECT    r4, r1, r2, r3   # 200
+    ADD_I32   r0, r0, r4
+
+    CONST_I32 r1, -5
+    CONST_I32 r2, 5
+    CONST_I32 r3, -99          # nonzero = true
+    SELECT    r4, r1, r2, r3   # -5
+    ADD_I32   r0, r0, r4
+
+    RET r0                     # = 295
+
+# ============================================================================
+# Main entry — run all demos, combine sums
+# ============================================================================
+main_entry:
+    CALL_BC r0, abs_sqrt_demo,              0  # 17
+    CALL_BC r1, floor_ceil_trunc_round_demo, 0 # 10
+    CALL_BC r2, min_max_copysign_demo,      0  # 2
+    CALL_BC r3, select_demo,                0  # 295
+
+    # grand total = 17+10+2+295 = 324
+    ADD_I32 r4, r0, r1
+    ADD_I32 r4, r4, r2
+    ADD_I32 r4, r4, r3
+
+    RETURN r4                  # = 324

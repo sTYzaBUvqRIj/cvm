@@ -146,6 +146,75 @@ static const char* vm_opcode_name(VMOpcode op)
         case OP_RETURN:       return "RETURN";
         case OP_CALL_BC:      return "CALL_BC";
         case OP_RET:          return "RET";
+        /* --- Extended opcodes --- */
+        case OP_CMP_U32:      return "CMP_U32";
+        case OP_CMP_U64:      return "CMP_U64";
+        case OP_IF_ULT:       return "IF_ULT";
+        case OP_IF_UGE:       return "IF_UGE";
+        case OP_IF_UGT:       return "IF_UGT";
+        case OP_IF_ULE:       return "IF_ULE";
+        case OP_SELECT:       return "SELECT";
+        case OP_CLZ_I32:      return "CLZ_I32";
+        case OP_CLZ_I64:      return "CLZ_I64";
+        case OP_CTZ_I32:      return "CTZ_I32";
+        case OP_CTZ_I64:      return "CTZ_I64";
+        case OP_POPCNT_I32:   return "POPCNT_I32";
+        case OP_POPCNT_I64:   return "POPCNT_I64";
+        case OP_ROTL_I32:     return "ROTL_I32";
+        case OP_ROTR_I32:     return "ROTR_I32";
+        case OP_ROTL_I64:     return "ROTL_I64";
+        case OP_ROTR_I64:     return "ROTR_I64";
+        case OP_ABS_I32:      return "ABS_I32";
+        case OP_ABS_I64:      return "ABS_I64";
+        case OP_MIN_I32:      return "MIN_I32";
+        case OP_MAX_I32:      return "MAX_I32";
+        case OP_MIN_U32:      return "MIN_U32";
+        case OP_MAX_U32:      return "MAX_U32";
+        case OP_MIN_I64:      return "MIN_I64";
+        case OP_MAX_I64:      return "MAX_I64";
+        case OP_MIN_U64:      return "MIN_U64";
+        case OP_MAX_U64:      return "MAX_U64";
+        case OP_MULH_I32:     return "MULH_I32";
+        case OP_MULH_U32:     return "MULH_U32";
+        case OP_MULH_I64:     return "MULH_I64";
+        case OP_MULH_U64:     return "MULH_U64";
+        case OP_BOOL_I32:     return "BOOL_I32";
+        case OP_BOOL_I64:     return "BOOL_I64";
+        case OP_ABS_F32:      return "ABS_F32";
+        case OP_ABS_F64:      return "ABS_F64";
+        case OP_SQRT_F32:     return "SQRT_F32";
+        case OP_SQRT_F64:     return "SQRT_F64";
+        case OP_FLOOR_F32:    return "FLOOR_F32";
+        case OP_FLOOR_F64:    return "FLOOR_F64";
+        case OP_CEIL_F32:     return "CEIL_F32";
+        case OP_CEIL_F64:     return "CEIL_F64";
+        case OP_TRUNC_F32:    return "TRUNC_F32";
+        case OP_TRUNC_F64:    return "TRUNC_F64";
+        case OP_ROUND_F32:    return "ROUND_F32";
+        case OP_ROUND_F64:    return "ROUND_F64";
+        case OP_MIN_F32:      return "MIN_F32";
+        case OP_MAX_F32:      return "MAX_F32";
+        case OP_MIN_F64:      return "MIN_F64";
+        case OP_MAX_F64:      return "MAX_F64";
+        case OP_COPYSIGN_F32: return "COPYSIGN_F32";
+        case OP_COPYSIGN_F64: return "COPYSIGN_F64";
+        case OP_LOAD8_OFF:    return "LOAD8_OFF";
+        case OP_LOAD8S_OFF:   return "LOAD8S_OFF";
+        case OP_LOAD16_OFF:   return "LOAD16_OFF";
+        case OP_LOAD16S_OFF:  return "LOAD16S_OFF";
+        case OP_LOAD32_OFF:   return "LOAD32_OFF";
+        case OP_LOAD32S_OFF:  return "LOAD32S_OFF";
+        case OP_LOAD64_OFF:   return "LOAD64_OFF";
+        case OP_LOAD_PTR_OFF: return "LOAD_PTR_OFF";
+        case OP_STORE8_OFF:   return "STORE8_OFF";
+        case OP_STORE16_OFF:  return "STORE16_OFF";
+        case OP_STORE32_OFF:  return "STORE32_OFF";
+        case OP_STORE64_OFF:  return "STORE64_OFF";
+        case OP_STORE_PTR_OFF:return "STORE_PTR_OFF";
+        case OP_LEA_REG:      return "LEA_REG";
+        case OP_MEMCPY:       return "MEMCPY";
+        case OP_MEMSET:       return "MEMSET";
+        case OP_SWITCH:       return "SWITCH";
         default:              return "UNKNOWN";
     }
 }
@@ -435,6 +504,110 @@ static int vm_disassemble_instruction_ext(const uint8_t* code, size_t size, size
         default: {
             snprintf(inst_text, sizeof(inst_text), "UNKNOWN (0x%04X)", (unsigned)op_val);
             inst_len = 2;
+            break;
+        }
+
+        /* ---------------------------------------------------------------- */
+        /* Extended opcode disassembly                                      */
+        /* ---------------------------------------------------------------- */
+
+        /* 3-reg: CMP_U32/U64, ROTL/ROTR, MIN+MAX int+uint, MULH, COPYSIGN, MIN/MAX float */
+        case OP_CMP_U32: case OP_CMP_U64:
+        case OP_ROTL_I32: case OP_ROTR_I32: case OP_ROTL_I64: case OP_ROTR_I64:
+        case OP_MIN_I32: case OP_MAX_I32: case OP_MIN_U32: case OP_MAX_U32:
+        case OP_MIN_I64: case OP_MAX_I64: case OP_MIN_U64: case OP_MAX_U64:
+        case OP_MULH_I32: case OP_MULH_U32: case OP_MULH_I64: case OP_MULH_U64:
+        case OP_MIN_F32: case OP_MAX_F32: case OP_MIN_F64: case OP_MAX_F64:
+        case OP_COPYSIGN_F32: case OP_COPYSIGN_F64: {
+            if (pc + 5 > size) return 0;
+            uint8_t dst = code[pc+2], a = code[pc+3], b = code[pc+4];
+            snprintf(inst_text, sizeof(inst_text), "%s r%u, r%u, r%u", op_str, dst, a, b);
+            inst_len = 5;
+            break;
+        }
+        /* 2-reg unary: CLZ/CTZ/POPCNT, ABS, BOOL, float unary */
+        case OP_CLZ_I32: case OP_CLZ_I64: case OP_CTZ_I32: case OP_CTZ_I64:
+        case OP_POPCNT_I32: case OP_POPCNT_I64:
+        case OP_ABS_I32: case OP_ABS_I64:
+        case OP_BOOL_I32: case OP_BOOL_I64:
+        case OP_ABS_F32: case OP_ABS_F64:
+        case OP_SQRT_F32: case OP_SQRT_F64:
+        case OP_FLOOR_F32: case OP_FLOOR_F64: case OP_CEIL_F32: case OP_CEIL_F64:
+        case OP_TRUNC_F32: case OP_TRUNC_F64: case OP_ROUND_F32: case OP_ROUND_F64: {
+            if (pc + 4 > size) return 0;
+            uint8_t dst = code[pc+2], src = code[pc+3];
+            snprintf(inst_text, sizeof(inst_text), "%s r%u, r%u", op_str, dst, src);
+            inst_len = 4;
+            break;
+        }
+        /* SELECT [dst:u8][a:u8][b:u8][cond:u8] */
+        case OP_SELECT: {
+            if (pc + 6 > size) return 0;
+            uint8_t dst = code[pc+2], a = code[pc+3], b = code[pc+4], cond = code[pc+5];
+            snprintf(inst_text, sizeof(inst_text), "SELECT r%u, r%u, r%u, r%u", dst, a, b, cond);
+            inst_len = 6;
+            break;
+        }
+        /* Unsigned conditional branches [A:u8][B:u8][offset:i16] */
+        case OP_IF_ULT: case OP_IF_UGE: case OP_IF_UGT: case OP_IF_ULE: {
+            if (pc + 6 > size) return 0;
+            uint8_t a = code[pc+2], b = code[pc+3];
+            int16_t off = (int16_t)vm_disasm_u16(code + pc + 4);
+            snprintf(inst_text, sizeof(inst_text), "%s r%u, r%u, %d", op_str, a, b, (int)off);
+            inst_len = 6;
+            break;
+        }
+        /* Load with offset [dst:u8][base:u8][offset:i32] = 8 bytes */
+        case OP_LOAD8_OFF: case OP_LOAD8S_OFF: case OP_LOAD16_OFF: case OP_LOAD16S_OFF:
+        case OP_LOAD32_OFF: case OP_LOAD32S_OFF: case OP_LOAD64_OFF: case OP_LOAD_PTR_OFF: {
+            if (pc + 8 > size) return 0;
+            uint8_t dst = code[pc+2], base = code[pc+3];
+            int32_t off = (int32_t)vm_disasm_u32(code + pc + 4);
+            snprintf(inst_text, sizeof(inst_text), "%s r%u, [r%u %+d]", op_str, dst, base, (int)off);
+            inst_len = 8;
+            break;
+        }
+        /* Store with offset [addr:u8][src:u8][offset:i32] = 8 bytes */
+        case OP_STORE8_OFF: case OP_STORE16_OFF: case OP_STORE32_OFF:
+        case OP_STORE64_OFF: case OP_STORE_PTR_OFF: {
+            if (pc + 8 > size) return 0;
+            uint8_t addr = code[pc+2], src = code[pc+3];
+            int32_t off  = (int32_t)vm_disasm_u32(code + pc + 4);
+            snprintf(inst_text, sizeof(inst_text), "%s [r%u %+d], r%u", op_str, addr, (int)off, src);
+            inst_len = 8;
+            break;
+        }
+        /* LEA_REG [dst:u8][base:u8][idx:u8] = 5 bytes */
+        case OP_LEA_REG: {
+            if (pc + 5 > size) return 0;
+            uint8_t dst = code[pc+2], base = code[pc+3], idx = code[pc+4];
+            snprintf(inst_text, sizeof(inst_text), "LEA_REG r%u, [r%u + r%u]", dst, base, idx);
+            inst_len = 5;
+            break;
+        }
+        /* MEMCPY / MEMSET [dst:u8][src:u8][len:u8] = 5 bytes */
+        case OP_MEMCPY: case OP_MEMSET: {
+            if (pc + 5 > size) return 0;
+            uint8_t d = code[pc+2], s = code[pc+3], l = code[pc+4];
+            snprintf(inst_text, sizeof(inst_text), "%s r%u, r%u, r%u", op_str, d, s, l);
+            inst_len = 5;
+            break;
+        }
+        /* SWITCH [reg:u8][count:u32][default:i32][off_0..N-1:i32] */
+        case OP_SWITCH: {
+            if (pc + 11 > size) return 0;
+            uint8_t  reg   = code[pc+2];
+            uint32_t count = vm_disasm_u32(code + pc + 3);
+            int32_t  def   = (int32_t)vm_disasm_u32(code + pc + 7);
+            if (pc + 11 + count * 4u > size) return 0;
+            int written = snprintf(inst_text, sizeof(inst_text),
+                "SWITCH r%u, %u cases, default=%d", reg, count, (int)def);
+            for (uint32_t i = 0; i < count && written < (int)sizeof(inst_text) - 20; i++) {
+                int32_t off = (int32_t)vm_disasm_u32(code + pc + 11 + i * 4u);
+                written += snprintf(inst_text + written, sizeof(inst_text) - (size_t)written,
+                    ", [%u]=%d", i, (int)off);
+            }
+            inst_len = (int)(11 + count * 4u);
             break;
         }
     }
