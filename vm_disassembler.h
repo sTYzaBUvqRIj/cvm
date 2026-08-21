@@ -501,12 +501,6 @@ static int vm_disassemble_instruction_ext(const uint8_t* code, size_t size, size
             inst_len = 3;
             break;
         }
-        default: {
-            snprintf(inst_text, sizeof(inst_text), "UNKNOWN (0x%04X)", (unsigned)op_val);
-            inst_len = 2;
-            break;
-        }
-
         /* ---------------------------------------------------------------- */
         /* Extended opcode disassembly                                      */
         /* ---------------------------------------------------------------- */
@@ -610,7 +604,15 @@ static int vm_disassemble_instruction_ext(const uint8_t* code, size_t size, size
             inst_len = (int)(11 + count * 4u);
             break;
         }
+
+        default: {
+            snprintf(inst_text, sizeof(inst_text), "UNKNOWN (0x%04X)", (unsigned)op_val);
+            inst_len = 2;
+            break;
+        }
     }
+
+
 
     /* Format line into out_buf */
     size_t pos = 0;

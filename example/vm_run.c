@@ -148,6 +148,7 @@ int main(int argc, char** argv)
             vm_profiler_dump(&ctx, stdout);
         }
 #endif
+        vm_destroy(&ctx);
         free(regs);
         cvmb_free(code);
         return (int)err;
@@ -173,7 +174,9 @@ int main(int argc, char** argv)
     }
 #endif
 
+    vm_destroy(&ctx);
     free(regs);
     cvmb_free(code);
     return 0;
 }
+

@@ -10,7 +10,7 @@
  *
  * Header-only library for assembling textual CVM assembly source code
  * into binary bytecode. Supports labels, comments, hex/dec immediates,
- * floats, and all 95 CVM opcodes.
+ * floats, and all ~160 CVM opcodes.
  */
 
 #ifndef VM_ASSEMBLER_H

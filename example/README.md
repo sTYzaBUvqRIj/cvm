@@ -42,7 +42,7 @@ example/
 ├── hash_algorithms.c            DJB2, FNV-1a 32-bit & FNV-1a 64-bit hashing algorithms
 │
 │── Extended Opcodes
-├── extended_ops.c               93-test suite:
+├── extended_ops.c               116-test suite:
 │                                  - CMP_U32/U64, IF_ULT/UGE/UGT/ULE (unsigned compare & branch)
 │                                  - SELECT (branchless conditional)
 │                                  - CLZ/CTZ/POPCNT (i32 & i64)
@@ -52,10 +52,11 @@ example/
 │                                  - BOOL_I32/I64 (normalize to 0/1)
 │                                  - ABS/SQRT/FLOOR/CEIL/TRUNC/ROUND_F32/F64
 │                                  - MIN/MAX/COPYSIGN_F32/F64
-│                                  - LOAD*/STORE* with immediate offset
+│                                  - LOAD*/STORE* with immediate offset (all widths)
 │                                  - LEA_REG (variable-index pointer arithmetic)
 │                                  - MEMCPY / MEMSET
-│                                  - SWITCH (O(1) dispatch table)
+│                                  - SWITCH (O(1) dispatch table with overflow guards)
+│                                  - Dirty high-bits register hygiene & opcode tracing
 │
 │── Tooling & Internals
 ├── error_handling.c             Every VMError code intentionally triggered

@@ -76,7 +76,7 @@ cvm/
 ├── DOCUMENTATION.md            # Complete opcode & API reference
 ├── README.md                   # This file
 ├── LICENSE                     # GNU General Public License v3.0
-├── example/                    # C API test & example programs (28 standalone files)
+├── example/                    # C API test & example programs (27 standalone C files)
 │   ├── Makefile                # Build system for all C examples
 │   ├── README.md               # C example suite documentation
 │   ├── vm_run.c                # CLI runner source
@@ -105,7 +105,7 @@ cvm/
 │   ├── debugger_profiler.c     # Debugger hooks, breakpoints & profiler report
 │   ├── subroutines.c           # Subroutines, recursion & call stack frames
 │   ├── hash_algorithms.c       # DJB2, FNV-1a 32-bit & FNV-1a 64-bit hashing
-│   └── extended_ops.c          # Extended opcodes — bit ops, float intrinsics, SWITCH (93 tests)
+│   └── extended_ops.c          # Extended opcodes — bit ops, float intrinsics, SWITCH (116 tests)
 └── example2/                   # Text Assembly (.cvma) programs (24 files)
     ├── Makefile                # Automates compilation, assembly, and execution
     ├── README.md               # Assembly workflow documentation
